@@ -16,8 +16,8 @@ any other bar to see its length.
 None of these papers was really retracted: they are well-known, well-loved
 papers, and the "retraction" is only the game's story.
 
-While it is a work in progress, the daily papers, the rules and saved games
-may still change.
+While it is a work in progress, future papers and the rules may still
+change; the papers of days already played never do.
 
 Retractle is one of the daily sky puzzles of
 [Urania's Mirror](https://bertblookers.github.io/), next to
@@ -48,8 +48,8 @@ python -m http.server 8082
 ```
 
 then open <http://localhost:8082>. Retractle needs a network connection to
-load its paper from arXiv. Locally, the "‹ Urania's Mirror" link leads back
-to the game itself; on the live site it leads to the hub.
+load its paper from arXiv. Locally, the Urania's Mirror mark top left
+leads back to the game itself; on the live site it leads to the hub.
 
 ## Inspiration
 

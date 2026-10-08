@@ -38,10 +38,11 @@
     return RETRACTLE_PAPERS.find(p => p.id === id && p.v === v) || null;
   }
 
-  // a practice paper: never today's daily, nor `not` (the one just played)
+  // a practice paper from today's era's pool: never today's daily, nor
+  // `not` (the one just played)
   function randomPaper(not) {
     const today = C.paperForDay(RETRACTLE_PAPERS, day);
-    const others = RETRACTLE_PAPERS.filter(p => p !== today && p !== not);
+    const others = C.poolForDay(RETRACTLE_PAPERS, day).filter(p => p !== today && p !== not);
     return others[Math.floor(Math.random() * others.length)] || today;
   }
 
@@ -68,38 +69,101 @@
 
   /* ============ drawing the paper ============ */
 
+  // a redacted word joins the puzzle: `el` is its bar, restored in place
+  function addToken(w, el) {
+    const n = C.norm(w);
+    el.setAttribute("class", "r");
+    el.setAttribute("data-i", tokens.length);
+    // for screen readers: a bar is "redacted, 6 characters"
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", `redacted, ${w.length} character${w.length === 1 ? "" : "s"}`);
+    if (!byNorm.has(n)) byNorm.set(n, []);
+    byNorm.get(n).push(tokens.length);
+    tokens.push({ w, n, el });
+  }
+
+  const hidden = w => !C.isCommon(C.norm(w));
+
   function addParts(parts, into) {
     for (const part of parts) {
       if (part.t !== undefined) {
         into.append(part.t);
       } else if (part.w !== undefined) {
-        const n = C.norm(part.w);
-        if (C.isCommon(n)) { into.append(part.w); continue; }
+        if (!hidden(part.w)) { into.append(part.w); continue; }
         const el = document.createElement("span");
-        el.className = "r";
-        el.dataset.i = tokens.length;
         el.dataset.len = part.w.length;
         el.style.setProperty("--len", part.w.length);
-        // for screen readers: a bar is "redacted, 6 letters"
-        el.setAttribute("role", "img");
-        el.setAttribute("aria-label", `redacted, ${part.w.length} character${part.w.length === 1 ? "" : "s"}`);
+        addToken(part.w, el);
         into.append(el);
-        if (!byNorm.has(n)) byNorm.set(n, []);
-        byNorm.get(n).push(tokens.length);
-        tokens.push({ w: part.w, n, el });
       } else if (part.tag !== undefined) {
         const el = document.createElement("span");
         el.className = "tag";
         el.textContent = part.tag;
         into.append(el);
       } else if (part.math) {
-        const el = document.createElement("span");
-        el.className = "math";
-        el.title = "mathematics (not part of the puzzle)";
-        el.textContent = "∑";
-        into.append(el);
+        // { math: true } is an older core.js's (a browser holding the old
+        // file during a deploy): draw what that version drew
+        into.append(typeof part.math === "object" ? drawMath(part.math) : "∑");
       }
     }
+  }
+
+  // maths, drawn as MathML from core.js's plain data (mathTree). A token
+  // with a redacted word in it becomes a row of tokens, the word's a bar of
+  // block characters as long as the word; the rest keeps its text, its
+  // spaces made non-breaking so MathML doesn't trim them away.
+  const MATHML = "http://www.w3.org/1998/Math/MathML";
+  function mathEl(name, attrs, text) {
+    const el = document.createElementNS(MATHML, name);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    if (text !== undefined) el.textContent = text;
+    return el;
+  }
+
+  function drawMath(node) {
+    if (!node.parts) {
+      const el = mathEl(node.m, node.a);
+      for (const c of node.c) el.append(drawMath(c));
+      return el;
+    }
+    if (!node.parts.some(p => p.w !== undefined && hidden(p.w))) {
+      return mathEl(node.m, node.a, node.parts.map(p => p.w ?? p.t).join(""));
+    }
+    const row = mathEl("mrow", {});
+    let text = "";
+    const flush = () => {
+      if (text) row.append(mathEl(node.m, node.a, text.replace(/^ +| +$/g, s => " ".repeat(s.length))));
+      text = "";
+    };
+    for (const p of node.parts) {
+      if (p.w !== undefined && hidden(p.w)) {
+        flush();
+        const el = mathEl(node.m, node.a, "█".repeat([...p.w].length));
+        addToken(p.w, el);
+        row.append(el);
+      } else {
+        text += p.w ?? p.t;
+      }
+    }
+    flush();
+    return row;
+  }
+
+  // a displayed equation: its rows and cells, aligned as in the paper
+  function drawEquation(rows) {
+    const table = document.createElement("table");
+    for (const cells of rows) {
+      const tr = document.createElement("tr");
+      for (const cell of cells) {
+        const td = document.createElement("td");
+        td.className = cell.align;
+        if (cell.rowspan > 1) td.rowSpan = cell.rowspan;
+        addParts(cell.parts, td);
+        tr.append(td);
+      }
+      table.append(tr);
+    }
+    return table;
   }
 
   function render(blocks) {
@@ -122,11 +186,14 @@
       } else if (b.kind === "para" || b.kind === "caption") {
         el = document.createElement("p");
         if (b.kind === "caption") el.className = "caption";
+        // a formula too wide for a phone scrolls inside its paragraph
+        if (b.parts.some(p => p.math)) el.classList.add("has-math");
         addParts(b.parts, el);
       } else if (b.kind === "equation") {
-        el = document.createElement("p");
+        el = document.createElement("div");
         el.className = "equation";
-        el.textContent = "∑ equation " + (b.tag || "");
+        // without rows: an older core.js's block (see addParts)
+        el.append(b.rows ? drawEquation(b.rows) : "∑ equation " + (b.tag || ""));
       }
       if (el) body.append(el);
     }
@@ -342,6 +409,18 @@
       row.append(next);
     }
     if (row.children.length) box.append(row);
+    // the other daily sky puzzles, when a game is done (add a game here once
+    // it can be played: Constelle)
+    const more = document.createElement("p");
+    more.className = "more-games";
+    const muldle = document.createElement("a");
+    muldle.href = "../muldle/";
+    muldle.textContent = "Muldle";
+    const hub = document.createElement("a");
+    hub.href = "../";
+    hub.textContent = "Urania’s Mirror";
+    more.append("More daily sky puzzles: ", muldle, " · all of ", hub);
+    box.append(more);
     box.hidden = false;
     // The stamp is the game's fiction: it never stands beside a real
     // paper's revealed title saying RETRACTED. A win stamps it RESTORED;
@@ -422,8 +501,9 @@
         $("guess-input").focus();
       }
     } catch (e) {
-      // not arXiv's fault: start this paper afresh on the next try
-      try { localStorage.removeItem(practice ? PRACTICE_KEY : DAILY_KEY); } catch { /* nothing saved */ }
+      // not arXiv's fault, and not the save's (validSave checked it): keep
+      // the save, so a passing fault (a half-updated cache during a deploy)
+      // costs no one their game
       $("paper-title").replaceChildren();
       $("paper-body").replaceChildren();
       $("guess-input").disabled = $("guess-submit").disabled = true;
@@ -456,7 +536,7 @@
 
   // a black bar shows how many characters it hides (the title's always do)
   $("paper").addEventListener("click", e => {
-    const el = e.target.closest(".r");
+    const el = e.target.closest("span.r"); // a bar in maths shows its length already
     if (el && !el.closest("#paper-title")) el.classList.toggle("count");
   });
 

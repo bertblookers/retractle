@@ -20,12 +20,11 @@
   position: relative;
 }
 
-.back {
+/* the way back to the hub (shared.css draws it) */
+.top .hub-mark {
   position: absolute;
   left: 1rem;
-  top: 1.35rem;
-  font-size: 0.9rem;
-  text-decoration: none;
+  top: 1.4rem;
 }
 
 .top h1 {
@@ -152,17 +151,24 @@
   padding-left: 0.7rem;
 }
 
-.paper-body .equation {
-  text-align: center;
-  color: #8a8578;
-  font-size: 0.85em;
-}
+/* maths as in the paper: inline in the line, displayed equations on lines
+   of their own (MathML, drawn by the browser); a formula too wide for the
+   screen scrolls in its own box instead of the page */
+.paper-body .has-math { overflow-x: auto; overflow-y: hidden; }
+.paper-body .equation { margin: 0.5rem 0 0.9rem; overflow-x: auto; overflow-y: hidden; }
+.paper-body .equation table { width: 100%; border-collapse: collapse; }
+.paper-body .equation td { padding: 0.15rem 0.1rem; vertical-align: middle; white-space: nowrap; }
+.paper-body .equation td.pad { width: 50%; }
+.paper-body .equation td.left { text-align: left; }
+.paper-body .equation td.right { text-align: right; }
+.paper-body .equation td.center { text-align: center; }
+.paper-body .equation td.eqno { text-align: right; padding-left: 1rem; }
+.paper-body math { font-size: 1.05em; }
 
 .tag { font-weight: bold; }
-.math { color: #8a8578; font-size: 0.85em; }
 
 /* a redacted word: a black bar as wide as the word, roughly */
-.r {
+span.r {
   display: inline-block;
   width: calc(var(--len) * 0.56em);
   height: 0.95em;
@@ -172,7 +178,7 @@
   cursor: pointer;
   position: relative;
 }
-.r.count::after {
+span.r.count::after {
   content: attr(data-len);
   position: absolute;
   inset: 0;
@@ -182,6 +188,10 @@
   color: #fff;
   font: 600 0.62em "Segoe UI", system-ui, sans-serif;
 }
+
+/* a redacted word inside maths: its block characters, solid black (a
+   MathML token keeps its maths layout, so no inline-block bar here) */
+math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
 
 /* restored words; .given = shown at the end, not restored by the player */
 .k.hl { background: var(--marker); border-radius: 2px; }
@@ -261,13 +271,14 @@
 .result .cite { margin-bottom: 0.2rem; }
 .result .rights { color: var(--dim); font-size: 0.85rem; margin-bottom: 0.5rem; }
 .result-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.result .more-games { color: var(--dim); font-size: 0.85rem; margin-top: 0.6rem; }
 
 /* phones: one column, the panel docked at the bottom of the screen */
 @media (max-width: 760px) {
-  .layout { grid-template-columns: 1fr; padding: 0.5rem 0.5rem 0; gap: 0; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 0.5rem 0.5rem 0; gap: 0; }
   .paper { padding: 2.6rem 1rem 1.5rem; font-size: 1rem; }
   .paper-title { font-size: 1.08rem; margin: 0.4rem -1rem 1rem; padding: 0.35rem 1rem; }
-  .back { position: static; display: block; text-align: left; margin-bottom: 0.2rem; }
+  .top .hub-mark { position: static; display: flex; width: fit-content; margin-bottom: 0.2rem; }
   .panel {
     position: sticky;
     top: auto;
