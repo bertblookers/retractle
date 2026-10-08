@@ -1,0 +1,68 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* What the hub and every game share: Muldle's night-sky palette, the page
+   background and the footer. A game adds its own stylesheet after this. */
+
+:root {
+  --bg: #0b0e1a;
+  --bg2: #121631;
+  --border: #3a3f5c;
+  --text: #e8eaf2;
+  --dim: #9aa0b8;
+  --accent: #7ea6e0;
+  --good: #4c9a4c;
+  --warn: #b8a038;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+[hidden] { display: none !important; }
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* a faint star field (a fixed layer: background-attachment: fixed on body
+   is broken on iOS Safari) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    radial-gradient(1px 1px at 12% 22%, #fff8 50%, transparent 50%),
+    radial-gradient(1px 1px at 78% 12%, #fff6 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 55% 35%, #fff9 50%, transparent 50%),
+    radial-gradient(1px 1px at 32% 68%, #fff5 50%, transparent 50%),
+    radial-gradient(1px 1px at 88% 55%, #fff7 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 8% 85%, #fff6 50%, transparent 50%),
+    radial-gradient(1px 1px at 66% 90%, #fff5 50%, transparent 50%),
+    linear-gradient(180deg, #0b0e1a 0%, #141a3a 100%);
+}
+
+a { color: var(--accent); }
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.foot {
+  margin-top: auto;
+  padding: 1.5rem 1rem 1rem;
+  max-width: 40rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--dim);
+  line-height: 1.5;
+}

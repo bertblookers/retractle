@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retractle — Restore the retracted paper</title>
+<meta name="description" content="Restore a famous astronomy paper word by word. A work in progress.">
+<link rel="stylesheet" href="shared.css?v=f87d753ee6">
+<link rel="stylesheet" href="retractle.css?v=f87d753ee6">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<header class="top">
+  <a class="back" href="../" title="All the games">‹ Urania’s Mirror</a>
+  <h1>RETRACTLE</h1>
+  <p class="puzzle-line"><span id="puzzle-label"></span>
+    <button id="practice-button" class="link-button" type="button"></button></p>
+  <p class="wip-note"><strong>Work in progress.</strong> The daily papers,
+    the rules and your saved games may still change.</p>
+</header>
+
+<details id="help" class="help">
+  <summary>How to play</summary>
+  <p><em>A paper has been accidentally retracted! It's on you to repair the
+  damaged document and make sure it's restored into the archive.</em></p>
+  <ul>
+    <li>Guess a word: it is restored everywhere it appears in the paper, in
+      all its forms (observe, observed, observing; galaxy, galaxies).</li>
+    <li>Restore every word of the title to win. The title's black bars show
+      how many characters they hide.</li>
+    <li>Small words (the, of, and, is, with…) were never redacted. Numbers
+      were.</li>
+    <li>Click a black bar to see how many characters it hides; click a guess
+      in the list to jump through its places.</li>
+    <li>A new paper every day at midnight. The papers are famous, well-loved
+      astronomy papers from <a href="https://arxiv.org" target="_blank"
+      rel="noopener">arXiv</a>; none of them was really retracted.</li>
+  </ul>
+  <p>Retractle is inspired by <a href="https://redactle.net" target="_blank"
+    rel="noopener">Redactle</a>, which does this with Wikipedia articles.</p>
+</details>
+
+<main class="layout">
+  <article id="paper" class="paper">
+    <div id="stamp" class="stamp" aria-hidden="true">RETRACTED</div>
+    <p class="fiction-note">A game: this famous paper was never really retracted.</p>
+    <p id="paper-status" class="paper-status">Fetching the paper from arXiv…</p>
+    <h2 id="paper-title" class="paper-title"></h2>
+    <div id="paper-body" class="paper-body"></div>
+  </article>
+
+  <aside class="panel" id="panel">
+    <section id="result" class="result" hidden></section>
+    <form id="guess-form" class="guess-form" autocomplete="off">
+      <input id="guess-input" type="text" inputmode="text" autocapitalize="off"
+        spellcheck="false" placeholder="Guess a word" aria-label="Guess a word" disabled>
+      <button id="guess-submit" type="submit" disabled>Restore</button>
+    </form>
+    <p id="message" class="message" role="status"></p>
+    <p id="score" class="score"></p>
+    <details id="guesses-box" class="guesses-box" open>
+      <summary>Guesses <span id="guess-count"></span></summary>
+      <table class="guesses">
+        <thead><tr><th>#</th><th>Word</th><th>Found</th></tr></thead>
+        <tbody id="guess-list"></tbody>
+      </table>
+    </details>
+    <button id="give-up" class="link-button give-up" type="button" hidden>Give up</button>
+  </aside>
+</main>
+
+<footer class="foot">
+  Inspired by <a href="https://redactle.net" target="_blank" rel="noopener">Redactle</a>.
+  No paper here was ever retracted: that's only the game's story. Each paper
+  is loaded from arXiv.org while you play and stays the work of its authors;
+  thank you to arXiv for use of its open access interoperability. Retractle is not affiliated with arXiv. Word forms from
+  <a href="LICENSE-AGID.txt">AGID</a> by Kevin Atkinson. ·
+  <a href="https://github.com/bertblookers/retractle" target="_blank" rel="noopener">Source</a> (AGPL-3.0)
+</footer>
+
+<script src="papers.js?v=f87d753ee6"></script>
+<script src="lemmas.js?v=f87d753ee6"></script>
+<script src="core.js?v=f87d753ee6"></script>
+<script src="retractle.js?v=f87d753ee6"></script>
+</body>
+</html>

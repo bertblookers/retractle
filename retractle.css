@@ -1,0 +1,288 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Retractle's own look, after shared.css (copied in from the hub's repository,
+   bertblookers/bertblookers.github.io). */
+
+/* the paper: a light sheet with black redaction bars */
+:root {
+  --sheet: #f6f3ea;
+  --ink: #1d1d1f;
+  --bar: #18181b;
+  --marker: #ffe46b;
+  --stamp-red: #b8322a;
+  --stamp-green: #2f7d4a;
+}
+
+.top {
+  width: 100%;
+  max-width: 76rem;
+  padding: 1rem 1rem 0.25rem;
+  text-align: center;
+  position: relative;
+}
+
+.back {
+  position: absolute;
+  left: 1rem;
+  top: 1.35rem;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.top h1 {
+  font-size: 1.9rem;
+  letter-spacing: 0.12em;
+}
+
+.puzzle-line {
+  color: var(--dim);
+  font-size: 0.95rem;
+  display: flex;
+  gap: 0.9rem;
+  justify-content: center;
+}
+
+.wip-note {
+  margin: 0.45rem auto 0;
+  max-width: 34rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+.help {
+  width: 100%;
+  max-width: 76rem;
+  padding: 0.25rem 1rem;
+  color: var(--dim);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.help summary { cursor: pointer; color: var(--accent); width: max-content; }
+.help p, .help ul { margin: 0.4rem 0 0.4rem 1.2rem; max-width: 46rem; }
+
+.layout {
+  width: 100%;
+  max-width: 76rem;
+  padding: 0.5rem 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.paper {
+  position: relative;
+  background: var(--sheet);
+  color: var(--ink);
+  border-radius: 4px;
+  box-shadow: 0 6px 28px #0008;
+  padding: 3rem 3rem 2.5rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.05rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.stamp {
+  position: absolute;
+  top: 0.9rem;
+  right: 1.1rem;
+  transform: rotate(-9deg);
+  border: 3px solid var(--stamp-red);
+  color: var(--stamp-red);
+  font: 800 1rem "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.14em;
+  padding: 0.1rem 0.55rem;
+  border-radius: 4px;
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 3;
+}
+.stamp.restored { border-color: var(--stamp-green); color: var(--stamp-green); }
+
+.paper-status { color: #555; font-style: italic; }
+
+/* the game's fiction, said where the stamp is (and so in any screenshot) */
+.fiction-note {
+  position: absolute;
+  top: 0.55rem;
+  left: 1.1rem;
+  max-width: calc(100% - 12rem);
+  color: #8a8578;
+  font: italic 0.75rem "Segoe UI", system-ui, sans-serif;
+}
+
+/* the title stays in view while the paper scrolls (as in Redactle); it
+   spans the sheet's padding so the text scrolls away under it */
+.paper-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--sheet);
+  border-bottom: 1px solid #e3ddcc;
+  font-size: 1.55rem;
+  line-height: 1.45;
+  text-align: center;
+  margin: 0.6rem -3rem 1.2rem;
+  padding: 0.5rem 3rem;
+}
+
+.paper-body h3, .paper-body h4, .paper-body h5 {
+  margin: 1.4rem 0 0.5rem;
+  line-height: 1.45;
+}
+.paper-body h3 { font-size: 1.2rem; }
+.paper-body h4 { font-size: 1.07rem; }
+.paper-body h5 { font-size: 1rem; font-style: italic; }
+.paper-body p { margin: 0 0 0.8rem; }
+
+.paper-body .label {
+  text-align: center;
+  font-weight: bold;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.3rem;
+}
+
+.paper-body .caption {
+  font-size: 0.92em;
+  border-left: 3px solid #ccc6b5;
+  padding-left: 0.7rem;
+}
+
+.paper-body .equation {
+  text-align: center;
+  color: #8a8578;
+  font-size: 0.85em;
+}
+
+.tag { font-weight: bold; }
+.math { color: #8a8578; font-size: 0.85em; }
+
+/* a redacted word: a black bar as wide as the word, roughly */
+.r {
+  display: inline-block;
+  width: calc(var(--len) * 0.56em);
+  height: 0.95em;
+  background: var(--bar);
+  border-radius: 2px;
+  vertical-align: -0.12em;
+  cursor: pointer;
+  position: relative;
+}
+.r.count::after {
+  content: attr(data-len);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font: 600 0.62em "Segoe UI", system-ui, sans-serif;
+}
+
+/* restored words; .given = shown at the end, not restored by the player */
+.k.hl { background: var(--marker); border-radius: 2px; }
+.k.cur { outline: 2px solid #e07b00; outline-offset: 1px; }
+.k.given { color: #6b665a; }
+
+/* the side panel: guess box, score, guess list */
+.panel {
+  position: sticky;
+  top: 1rem;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: calc(100vh - 2rem);
+}
+
+.guess-form { display: flex; gap: 0.4rem; }
+.guess-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.guess-form button, .result button {
+  padding: 0.5rem 0.8rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #0b0e1a;
+  font-weight: 600;
+  cursor: pointer;
+}
+.guess-form button:disabled { opacity: 0.4; cursor: default; }
+
+.message { min-height: 1.3em; font-size: 0.92rem; }
+.score { color: var(--dim); font-size: 0.88rem; }
+
+.guesses-box { min-height: 0; overflow: auto; }
+.guesses-box summary { cursor: pointer; color: var(--dim); font-size: 0.9rem; }
+.guesses { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin-top: 0.3rem; }
+.guesses th { text-align: left; color: var(--dim); font-weight: normal; font-size: 0.8rem; }
+.guesses td, .guesses th { padding: 0.15rem 0.35rem; }
+.guesses td:last-child, .guesses th:last-child { text-align: right; }
+.guesses tbody tr { cursor: pointer; }
+.guesses tbody tr:hover { background: #ffffff10; }
+.guesses tr.miss td { color: var(--dim); }
+.guess-word {
+  background: none;
+  border: none;
+  padding: 0.1rem 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.guess-word:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.guesses tr.sel { background: #ffe46b30; }
+
+.give-up { align-self: flex-start; font-size: 0.85rem; color: var(--dim); }
+
+.result {
+  border: 1px solid var(--good);
+  border-radius: 6px;
+  padding: 0.7rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.result-head { font-weight: 700; margin-bottom: 0.3rem; }
+.result .cite { margin-bottom: 0.2rem; }
+.result .rights { color: var(--dim); font-size: 0.85rem; margin-bottom: 0.5rem; }
+.result-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* phones: one column, the panel docked at the bottom of the screen */
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; padding: 0.5rem 0.5rem 0; gap: 0; }
+  .paper { padding: 2.6rem 1rem 1.5rem; font-size: 1rem; }
+  .paper-title { font-size: 1.08rem; margin: 0.4rem -1rem 1rem; padding: 0.35rem 1rem; }
+  .back { position: static; display: block; text-align: left; margin-bottom: 0.2rem; }
+  .panel {
+    position: sticky;
+    top: auto;
+    bottom: 0;
+    z-index: 4; /* above the paper's sticky title on short screens */
+    border-radius: 8px 8px 0 0;
+    padding: 0.6rem 0.7rem;
+    gap: 0.35rem;
+    max-height: 45vh;
+    box-shadow: 0 -6px 20px #0009;
+  }
+  .guesses-box { max-height: 26vh; }
+  /* the feedback above the input: an on-screen keyboard covers what's below */
+  .message { order: -1; }
+  /* tap targets of at least about 24 px */
+  .link-button, .help summary, .guesses-box summary { padding: 0.4rem 0; }
+  .puzzle-line .link-button { padding: 0.4rem 0.3rem; }
+}
