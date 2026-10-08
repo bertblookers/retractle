@@ -210,15 +210,57 @@
   // notes/render-speed.md). The number lies over its bar, so drawing it
   // late moves nothing. (An older retractle.css draws exactly the bars with
   // `count`, so a deploy's mixed cache still shows them.)
+  // An IntersectionObserver answers only after the browser has painted, so
+  // after an instant jump or a fast scroll the bars on screen showed no
+  // number for a frame or two (re-check of 08-10-2026). Scroll and resize
+  // events come before the paint: on each, and once the page is set up,
+  // numberInView numbers the blocks near the view at once. The observer
+  // stays for whatever else moves the page (How to play folding).
+  let barBlocks = [];          // the paper's blocks with bars, top to bottom
+  let unnumbered = new Set();  // those whose bars show no number yet
+  let near = null;             // the IntersectionObserver
+
+  function numberBlock(el) {
+    for (const b of el.querySelectorAll("span.r")) b.classList.add("count");
+    unnumbered.delete(el);
+    if (near) near.unobserve(el);
+  }
+
   function numberNear(blocks) {
-    const number = el => { for (const b of el.querySelectorAll("span.r")) b.classList.add("count"); };
-    if (typeof IntersectionObserver === "undefined") { for (const el of blocks) number(el); return; }
-    const near = new IntersectionObserver(entries => {
-      for (const e of entries) {
-        if (e.isIntersecting) { number(e.target); near.unobserve(e.target); }
-      }
+    barBlocks = [...blocks].filter(el => el.querySelector("span.r"));
+    unnumbered = new Set(barBlocks);
+    if (typeof IntersectionObserver === "undefined") { for (const el of barBlocks) numberBlock(el); return; }
+    near = new IntersectionObserver(entries => {
+      for (const e of entries) if (e.isIntersecting) numberBlock(e.target);
     }, { rootMargin: "100% 0px" });
-    for (const el of blocks) if (el.querySelector("span.r")) near.observe(el);
+    for (const el of barBlocks) near.observe(el);
+    addEventListener("scroll", numberInView, { passive: true });
+    addEventListener("resize", numberInView);
+  }
+
+  // the blocks within a screen's height of the view (the observer's margin),
+  // numbered now; every position is read before any class is set, so the
+  // layout is worked out once
+  function numberInView() {
+    if (!unnumbered.size) {
+      removeEventListener("scroll", numberInView);
+      removeEventListener("resize", numberInView);
+      return;
+    }
+    const vh = innerHeight;
+    // the blocks lie one under the other: the first that reaches the margin
+    // above the view, by halving
+    let lo = 0, hi = barBlocks.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (barBlocks[mid].getBoundingClientRect().bottom < -vh) lo = mid + 1;
+      else hi = mid;
+    }
+    const todo = [];
+    for (let i = lo; i < barBlocks.length && barBlocks[i].getBoundingClientRect().top <= 2 * vh; i++) {
+      if (unnumbered.has(barBlocks[i])) todo.push(barBlocks[i]);
+    }
+    for (const el of todo) numberBlock(el);
   }
 
   // every token a guess restores (its plural/singular too)
@@ -278,12 +320,12 @@
       b.type = "button";
       b.className = "guess-word";
       b.textContent = g;
-      b.addEventListener("click", e => { e.stopPropagation(); select(i, true); });
+      b.addEventListener("click", e => { e.stopPropagation(); pick(i); });
       word.append(b);
       const found = document.createElement("td");
       found.textContent = hits[i];
       tr.append(num, word, found);
-      tr.addEventListener("click", () => select(i, true));
+      tr.addEventListener("click", () => pick(i));
       list.prepend(tr); // newest on top
     });
     $("guess-count").textContent = guesses.length ? `(${guesses.length})` : "";
@@ -302,10 +344,39 @@
       selected.pos = (selected.pos + 1) % places.length;
       const el = tokens[places[selected.pos]].el;
       el.classList.add("cur");
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      // no animated scroll for a player who asked for less motion (review
+      // of 08-10-2026; "auto" is instant, as no stylesheet sets
+      // scroll-behavior)
+      el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       say(`“${guesses[i]}”: ${selected.pos + 1} of ${places.length}`);
     }
     for (const tr of $("guess-list").children) tr.classList.toggle("sel", +tr.dataset.i === i);
+  }
+
+  // A guess picked in the list, or guessed again (user, 08-10-2026: so the
+  // player never hunts for it in the list): its places lit, the next one
+  // brought into view, and its row in view in the list, scrolled inside the
+  // list's own box (scrolling the row into view would stop the page's jump).
+  // A row out of sight goes near the top of the box, a row's room above
+  // it if the box has that room (at the top of the page the box can reach
+  // below the screen). On a phone in landscape the box is lower than one
+  // row: the row is centred in it, so its word shows (review and re-check
+  // of 08-10-2026: the room above pushed the row out of such a box, then
+  // its top edge cut the word).
+  function pick(i) {
+    select(i, true);
+    const box = $("guesses-box");
+    const row = $("guess-list").querySelector(`tr[data-i="${i}"]`);
+    if (!box.open || !row) return;
+    const b = box.getBoundingClientRect(), r = row.getBoundingClientRect();
+    // the box's part on screen (all of it, if none is)
+    let top = Math.max(b.top, 0), bottom = Math.min(b.bottom, innerHeight);
+    if (bottom <= top) { top = b.top; bottom = b.bottom; }
+    if (r.height > bottom - top) {
+      box.scrollTop += (r.top + r.bottom) / 2 - (top + bottom) / 2;
+    } else if (r.top < top || r.bottom > bottom) {
+      box.scrollTop += r.top - b.top - Math.min(r.height, bottom - top - r.height);
+    }
   }
 
   function say(text) {
@@ -323,20 +394,22 @@
     const parts = C.guessParts(input);
     if (parts.error !== undefined) { say(parts.error); return; }
     const said = [];
+    let refused = null; // the first part refused (a single word's message)
+    const again = [];   // the parts guessed before: { repeat, form }
+    let other = false;  // a part refused for another reason than being
+                        // guessed before or a small word (too long)
     for (const raw of parts.words) {
       let r = C.checkGuess(raw, guesses);
       if (r.error === undefined) {
         const twin = C.twinOf(r.n, guesses);
         if (twin !== undefined && hiddenPlaces(r.n) === 0) {
-          r = { error: `Already restored by “${twin}”`, repeat: twin };
+          r = { error: `Already restored by “${twin}”`, repeat: twin, form: true };
         }
       }
       if (r.error !== undefined) {
-        if (parts.words.length === 1) {
-          say(r.error);
-          if (r.repeat !== undefined) select(guesses.indexOf(r.repeat), false);
-          return;
-        }
+        refused = refused || r;
+        if (r.repeat !== undefined) again.push(r);
+        else if (!C.isCommon(C.norm(raw))) other = true;
         continue;
       }
       guesses.push(r.n);
@@ -346,7 +419,22 @@
         : total ? `“${r.n}”: nothing new (all ${total} already restored)`
         : `“${r.n}” is not in the paper`);
     }
-    if (!said.length) { say("Nothing new to restore in that"); return; }
+    if (!said.length) {
+      // Nothing new. A word guessed before (the same word, another form of
+      // it that restores nothing new, or each part of a joined guess) acts
+      // as if that guess were picked in the list (user, 08-10-2026: never
+      // hunt for it in the list; the other form and joined guesses:
+      // coordinator, same reason). The message comes after the jump's own
+      // "1 of 3", so it stays.
+      if (again.length) pick(guesses.indexOf(again[0].repeat));
+      say(parts.words.length === 1 ? refused.error
+        // quoted as read, as a single word's message is (re-check of
+        // 08-10-2026: the field's own quotes were doubled)
+        : again.length && !other && again.every(r => !r.form)
+          ? `You already guessed “${C.cleanGuess ? C.cleanGuess(input) : input.trim()}”`
+        : "Nothing new to restore in that");
+      return;
+    }
     say(said.join(" · "));
     selected = null;
     drawGuesses();
@@ -465,6 +553,96 @@
     location.reload();
   }
 
+  /* ============ What's new ============ */
+
+  // One fold under How to play: the latest update (What's new), On the
+  // horizon (only while there are plans) and Earlier updates (folded, each
+  // entry its own fold), from news.js; core.js's newsParts decides what goes
+  // where and what opens. Whether this browser showed the latest update is
+  // remembered (local only, nothing is sent). A draft (news-drafts.js, on
+  // the development page only) is marked as one.
+  const SEEN_KEY = "retractle-seen-v1"; // the id of the latest update shown
+
+  function drawNews(returning) {
+    const box = $("news");
+    // an older index.html or core.js, or no news.js (a deploy's mixed
+    // cache): no What's new, the game as before
+    if (!box || !C.newsParts || typeof RETRACTLE_NEWS === "undefined") return;
+    let seen = null;
+    try { seen = localStorage.getItem(SEEN_KEY); } catch { /* private window */ }
+    const parts = C.newsParts(RETRACTLE_NEWS, day, seen, returning);
+    if (!parts.latest && !parts.horizon.length) return;
+    const fmt = d => new Date(d.y, d.m - 1, d.d)
+      .toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+    // a title, then its dim date ("planned" for a plan, "from" a coming
+    // switch's date) and a draft's mark, a space apart so a screen reader
+    // doesn't run them together
+    const when = ({ entry, date }, coming) => {
+      const span = document.createElement("span");
+      span.className = "news-when";
+      span.textContent = !date ? (coming ? "planned" : "") : (coming ? "from " : "") + fmt(date);
+      if (entry.draft) {
+        const mark = document.createElement("span");
+        mark.className = "news-draft";
+        mark.textContent = "draft";
+        span.append(span.textContent ? " · " : "", mark);
+      }
+      return span;
+    };
+    const items = list => {
+      const ul = document.createElement("ul");
+      for (const text of list || []) {
+        const li = document.createElement("li");
+        li.textContent = text;
+        ul.append(li);
+      }
+      return ul;
+    };
+    if (parts.latest) {
+      $("news-when").replaceChildren(...when(parts.latest, false).childNodes);
+      const title = document.createElement("p");
+      title.className = "news-title";
+      title.textContent = parts.latest.entry.title;
+      $("news-latest").replaceChildren(title, items(parts.latest.entry.items));
+      box.dataset.id = parts.latest.entry.id;
+    }
+    if (parts.horizon.length) {
+      $("news-horizon-list").replaceChildren(...parts.horizon.map(h => {
+        const entry = document.createElement("div");
+        entry.className = "news-entry";
+        entry.dataset.id = h.entry.id;
+        const title = document.createElement("p");
+        title.className = "news-title";
+        title.append(h.entry.title, " ", when(h, true));
+        entry.append(title);
+        if (h.entry.items && h.entry.items.length) entry.append(items(h.entry.items));
+        return entry;
+      }));
+      $("news-horizon").hidden = false;
+    }
+    if (parts.earlier.length) {
+      $("news-earlier-list").replaceChildren(...parts.earlier.map(e => {
+        const entry = document.createElement("details");
+        entry.className = "news-entry";
+        entry.dataset.id = e.entry.id;
+        entry.open = e.open;
+        const summary = document.createElement("summary");
+        summary.append(e.entry.title, " ", when(e, false));
+        entry.append(summary, items(e.entry.items));
+        return entry;
+      }));
+      $("news-earlier").open = parts.earlierOpen;
+      $("news-earlier").hidden = false;
+    }
+    box.open = parts.latestOpen;
+    box.hidden = false;
+    // shown: folded from the next visit on, until a newer update (a draft
+    // isn't remembered: it may still change)
+    if (parts.latest && !parts.latest.entry.draft) {
+      try { localStorage.setItem(SEEN_KEY, parts.latest.entry.id); } catch { /* unsaved */ }
+    }
+  }
+
   /* ============ start ============ */
 
   async function fetchPaper() {
@@ -484,8 +662,16 @@
   }
 
   async function start() {
-    // a first visit opens How to play
-    if (!load(DAILY_KEY) && !load(PRACTICE_KEY)) $("help").open = true;
+    // a first visit opens How to play; a returning player, What's new on
+    // an update they haven't seen
+    const returning = !!(load(DAILY_KEY) || load(PRACTICE_KEY));
+    if (!returning) $("help").open = true;
+    try {
+      drawNews(returning);
+    } catch (e) {
+      // What's new is extra: the game plays without it
+      console.error("What's new:", e);
+    }
     const { p, s } = choosePuzzle();
     paper = p;
     guesses = s ? s.guesses.slice() : [];
@@ -523,6 +709,8 @@
         showLength(); // a browser may have kept the field's text over a reload
         $("guess-input").focus();
       }
+      // the bars on screen show their numbers in the first paint
+      numberInView();
     } catch (e) {
       // not arXiv's fault, and not the save's (validSave checked it): keep
       // the save, so a passing fault (a half-updated cache during a deploy)
@@ -552,15 +740,29 @@
   // What's typed, counted as the bars count it (user, 08-10-2026: "5-5" for
   // "light-curve"), at the field's right end, after every change: typing,
   // deleting, pasting, cutting, the field cleared after a guess. Hidden
-  // while the field is empty; the text keeps clear of it.
+  // while the field is empty; the text keeps clear of it. Its room is half
+  // the field: where wide characters (em dashes, emoji) overflow it on a
+  // narrow phone, the count is asked for in fewer characters until it fits,
+  // so its end, the word being typed, stays in view (re-check of
+  // 08-10-2026: at 320 px the end was clipped). The stylesheet clips any
+  // rest from the start.
   function showLength() {
     const input = $("guess-input");
     const out = $("guess-length");
     // an older index.html or core.js (a deploy's mixed cache): no count
     if (!out || !C.typedLengths) return;
-    const text = C.typedLengths(input.value);
-    out.textContent = text;
-    out.hidden = !text;
+    const fits = () => {
+      const text = document.createRange();
+      text.selectNodeContents(out);
+      return text.getBoundingClientRect().width <= out.getBoundingClientRect().width + 0.5;
+    };
+    let text = C.typedLengths(input.value);
+    for (let max = [...text].length - 1; ; max--) {
+      out.textContent = text;
+      out.hidden = !text;
+      if (!text || max < 3 || fits()) break;
+      text = C.typedLengths(input.value, max);
+    }
     input.style.paddingRight = text ? `calc(${out.offsetWidth}px + 1rem)` : "";
   }
   $("guess-input").addEventListener("input", showLength);

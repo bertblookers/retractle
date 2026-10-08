@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retractle — Restore the retracted paper</title>
 <meta name="description" content="Restore a famous astronomy paper word by word. A work in progress.">
-<link rel="stylesheet" href="shared.css?v=7a519ea0bf">
-<link rel="stylesheet" href="retractle.css?v=7a519ea0bf">
+<link rel="stylesheet" href="shared.css?v=45222fbdb5">
+<link rel="stylesheet" href="retractle.css?v=45222fbdb5">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -43,6 +43,21 @@
   </ul>
   <p>Retractle is inspired by <a href="https://redactle.net" target="_blank"
     rel="noopener">Redactle</a>, which does this with Wikipedia articles.</p>
+</details>
+
+<!-- What's new, On the horizon and Earlier updates: one fold, drawn by
+     retractle.js from news.js; hidden while there is nothing to show -->
+<details id="news" class="help news" hidden>
+  <summary>What's new <span id="news-when" class="news-when"></span></summary>
+  <div id="news-latest" class="news-latest"></div>
+  <details id="news-horizon" class="news-part" open hidden>
+    <summary>On the horizon</summary>
+    <div id="news-horizon-list"></div>
+  </details>
+  <details id="news-earlier" class="news-part" hidden>
+    <summary>Earlier updates</summary>
+    <div id="news-earlier-list"></div>
+  </details>
 </details>
 
 <main class="layout">
@@ -86,9 +101,10 @@
   <a href="https://github.com/bertblookers/retractle" target="_blank" rel="noopener">Source</a> (AGPL-3.0)
 </footer>
 
-<script src="papers.js?v=7a519ea0bf"></script>
-<script src="lemmas.js?v=7a519ea0bf"></script>
-<script src="core.js?v=7a519ea0bf"></script>
-<script src="retractle.js?v=7a519ea0bf"></script>
+<script src="papers.js?v=45222fbdb5"></script>
+<script src="lemmas.js?v=45222fbdb5"></script>
+<script src="core.js?v=45222fbdb5"></script>
+<script src="news.js?v=45222fbdb5"></script>
+<script src="retractle.js?v=45222fbdb5"></script>
 </body>
 </html>

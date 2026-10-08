@@ -61,6 +61,21 @@
 .help summary { cursor: pointer; color: var(--accent); width: max-content; }
 .help p, .help ul { margin: 0.4rem 0 0.4rem 1.2rem; max-width: 46rem; }
 
+/* What's new: a fold like How to play; inside, the latest update, then On
+   the horizon and Earlier updates as folds of their own (each earlier
+   entry too), titles in the text colour, dates dim */
+.news { padding-top: 0; }
+.news .news-when { color: var(--dim); font-size: 0.82rem; margin-left: 0.2rem; }
+.news .news-draft { color: var(--warn); font-weight: 600; }
+.news .news-title { color: var(--text); font-weight: 600; margin-bottom: 0; }
+.news .news-title + ul { margin-top: 0.15rem; }
+.news .news-part { margin: 0.5rem 0 0.3rem 1.2rem; max-width: 46rem; }
+.news .news-part > summary { color: var(--text); }
+.news .news-part p, .news .news-part ul { margin-left: 1.2rem; }
+.news .news-entry { margin: 0.35rem 0; }
+.news .news-entry > summary { width: auto; color: var(--text); margin-left: 1.2rem; }
+.news .news-entry > summary ~ ul { margin-left: 2.4rem; }
+
 .layout {
   width: 100%;
   max-width: 76rem;
@@ -197,6 +212,23 @@ span.r.count::after {
   line-height: 1;
 }
 
+/* print: every bar black with its number, the ones never scrolled near the
+   screen too (re-check of 08-10-2026: they printed without one); browsers
+   leave backgrounds out of a print unless told */
+@media print {
+  span.r { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  span.r::after {
+    content: attr(data-len);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font: normal 600 max(0.62em, 0.6rem)/1 "Segoe UI", system-ui, sans-serif;
+  }
+}
+
 /* an older retractle.js's maths bar (block characters), in a deploy's
    mixed cache */
 math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
@@ -205,6 +237,20 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
 .k.hl { background: var(--marker); border-radius: 2px; }
 .k.cur { outline: 2px solid #e07b00; outline-offset: 1px; }
 .k.given { color: #6b665a; }
+
+/* forced colours (Windows High Contrast) replace every background with the
+   page's, which took away the bars and the marker of a guess's places
+   (review of 08-10-2026): the bars in the text colour (in maths too) with
+   their numbers in the page's, the places of the picked guess in the
+   system's mark colours, the current one outlined in the text colour.
+   After the rules above, which it overrides at the same specificity
+   (re-check of 08-10-2026). */
+@media (forced-colors: active) {
+  span.r, math .r { forced-color-adjust: none; background: CanvasText; color: CanvasText; }
+  span.r.count::after, span.r::after { forced-color-adjust: none; color: Canvas; }
+  .k.hl { forced-color-adjust: none; background: Mark; color: MarkText; }
+  .k.cur { outline-color: CanvasText; }
+}
 
 /* the side panel: guess box, score, guess list */
 .panel {
@@ -222,7 +268,9 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
 
 .guess-form { display: flex; gap: 0.4rem; }
 /* what's typed, counted as the bars count it ("6", "5-5"), at the field's
-   right end: drawn over the field, so nothing moves */
+   right end: drawn over the field, so nothing moves. retractle.js shortens
+   a count too wide for its room; what still overflows is clipped from the
+   start (flex-end), never the end, the word being typed */
 .guess-field { flex: 1; min-width: 0; display: flex; position: relative; }
 .guess-length {
   position: absolute;
@@ -230,6 +278,8 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
   top: 50%;
   transform: translateY(-50%);
   max-width: 50%;
+  display: flex;
+  justify-content: flex-end;
   overflow: hidden;
   color: var(--dim);
   font-size: 0.9rem;
@@ -319,5 +369,6 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
   .message { order: -1; }
   /* tap targets of at least about 24 px */
   .link-button, .help summary, .guesses-box summary { padding: 0.4rem 0; }
+  .news .news-part, .news .news-entry { margin-top: 0.1rem; margin-bottom: 0.1rem; }
   .puzzle-line .link-button { padding: 0.4rem 0.3rem; }
 }

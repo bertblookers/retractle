@@ -35,9 +35,9 @@ Copyright of every paper stays with its authors.
 
 ## Privacy
 
-No accounts and no tracking. Your games are kept only in your own browser
-(`localStorage`). Retractle's one outside request is the day's paper, loaded
-from arxiv.org.
+No accounts and no tracking. Everything Retractle remembers, such as your
+games, is kept only in your own browser (`localStorage`). Retractle's one
+outside request is the day's paper, loaded from arxiv.org.
 
 ## Run locally
 

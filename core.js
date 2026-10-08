@@ -112,10 +112,17 @@ const RetractleCore = (() => {
   // What the player typed -> { words } (one, or the parts of a joined guess,
   // split the way the paper's words are: "light-curve" is light + curve,
   // "Hubble's" Hubble + s, "2.4" 2 + 4, as in Redactle) or { error }. Quotes
-  // at the ends are dropped ("'Oumuamua").
+  // at the ends are dropped ("'Oumuamua"). Read in NFC, as typedLengths
+  // reads it: a pasted accent as a letter plus a combining mark (from a PDF)
+  // is one word, as the count beside the field shows (review of 08-10-2026).
   const JOINED = /^[\p{L}\p{N}]+(?:[-‐‑–'’.][\p{L}\p{N}]+)+$/u;
+  // the guess as it is read: NFC, spaces and quotes or full stops at the
+  // ends dropped (the page quotes it back: "You already guessed …")
+  function cleanGuess(input) {
+    return input.normalize("NFC").trim().replace(/^['’‘"“”.]+|['’‘"“”.]+$/g, "");
+  }
   function guessParts(input) {
-    const raw = input.trim().replace(/^['’‘"“”.]+|['’‘"“”.]+$/g, "");
+    const raw = cleanGuess(input);
     if (!raw) return { error: "" };
     if (ONE_WORD.test(raw)) return { words: [raw] };
     if (JOINED.test(raw)) return { words: raw.split(/[-‐‑–'’.]/) };
@@ -128,19 +135,33 @@ const RetractleCore = (() => {
   // matches its bar: "galaxy" "6", "2048" "4", "light-curve" "5-5",
   // "Hubble's" "6'1", "dark matter" "4 6". Spaces and quotes at the ends
   // are dropped as in guessParts, a run of spaces is one; "" without a word.
-  // At most TYPED_MAX characters, so it fits the field: a longer count (a
-  // pasted sentence) keeps its end, the word being typed, after "…".
+  // At most `max` characters (TYPED_MAX; the page asks for fewer when wide
+  // characters overflow a narrow field), so it fits: a longer count (a
+  // pasted sentence) keeps its end, the word being typed, after "…", and
+  // always the last word's number: when what follows that word is longer
+  // than the room (a run of emoji), it is cut after the number, "…" at the
+  // cut (re-check of 08-10-2026: it left a bare "…").
   const TYPED_MAX = 10;
-  function typedLengths(input) {
+  function typedLengths(input, max = TYPED_MAX) {
     const raw = input.normalize("NFC").trim().replace(/^['’‘"“”.]+|['’‘"“”.]+$/g, "").replace(/\s+/g, " ");
     const parts = tokenize(raw);
-    if (!parts.some(p => p.w !== undefined)) return "";
+    const last = parts.findLastIndex(p => p.w !== undefined);
+    if (last < 0) return "";
     const pieces = parts.map(p => p.w !== undefined ? String([...p.w].length) : p.t);
-    if (pieces.join("").length <= TYPED_MAX) return pieces.join("");
-    // whole pieces from the end; it starts with a number, not a separator
-    let tail = "";
-    while ((pieces.at(-1) + tail).length < TYPED_MAX) tail = pieces.pop() + tail;
-    return "…" + tail.replace(/^\D+/, "");
+    const size = from => [...pieces.slice(from).join("")].length; // characters, not UTF-16 units
+    if (size(0) <= max) return pieces.join("");
+    // whole pieces from the end, after "…", starting with a number
+    let from = -1;
+    for (let k = last; k >= 0; k--) {
+      if (parts[k].w === undefined) continue;
+      if (size(k) + 1 > max) break;
+      from = k;
+    }
+    if (from >= 0) return "…" + pieces.slice(from).join("");
+    const lead = last > 0 ? "…" : "";
+    const rest = [...pieces.slice(last + 1).join("")];
+    const room = Math.max(0, max - lead.length - pieces[last].length - 1);
+    return lead + pieces[last] + rest.slice(0, room).join("") + (rest.length > room ? "…" : "");
   }
 
   // One word -> { n } (the normalised word) or { error }. Only the same
@@ -148,7 +169,7 @@ const RetractleCore = (() => {
   // the page, which knows whether it would still restore anything (`twinOf`).
   // `guessed` holds the earlier guesses (normalised).
   function checkGuess(input, guessed) {
-    const raw = input.trim();
+    const raw = input.normalize("NFC").trim();
     if (!raw) return { error: "" };
     if (!ONE_WORD.test(raw)) return { error: "One word at a time: letters and digits only" };
     const n = norm(raw);
@@ -286,6 +307,50 @@ const RetractleCore = (() => {
   // the papers a practice game draws from: today's era's pool
   function poolForDay(papers, day, eras = ERAS) {
     return eraPool(papers, eras[eraIndex(day, eras)]);
+  }
+
+  /* ============ What's new ============ */
+
+  // The family's one screen for updates (spec: the hub's notes/whats-new.md):
+  // What's new (the latest update), On the horizon (updates still to come,
+  // then the plans) and Earlier updates (newest first), for the player's
+  // day `today` (dayNumber()). `news` = { updates, planned } (news.js): an
+  // update is { id, title, items } with `date` { y, m, d }, the day it went
+  // live, or `era: n` for a pool switch, dated by that era's start. An era's
+  // update starts with the era and sits On the horizon until then; any
+  // other counts as started whatever the player's local date, so it never
+  // shows a promised date (an update without a date is a draft not yet
+  // released: newest). Ties keep the list's order. `seen` is the id of the
+  // latest update this browser showed, `returning` whether it has played
+  // before: What's new opens on an update a returning player hasn't seen
+  // (a first visit opens How to play instead), Earlier updates on the ones
+  // newer than the update seen. Returns { latest, horizon, earlier,
+  // latestOpen, earlierOpen }: `latest` { entry, date } or null, `horizon`
+  // [{ entry, date }] (date null for a plan), `earlier` [{ entry, date, open }].
+  function newsParts(news, today, seen, returning, eras = ERAS) {
+    const dated = [];
+    (news.updates || []).forEach((entry, i) => {
+      const era = entry.era === undefined ? null : eras.find(e => e.n === entry.era);
+      if (era === undefined) return; // an era not (yet) in ERAS: not shown
+      const date = era ? era.start : entry.date || null;
+      dated.push({ entry, date, i, day: date ? dayOfDate(date) : Infinity, started: !era || dayOfDate(era.start) <= today });
+    });
+    dated.sort((a, b) => (a.day === b.day ? 0 : b.day - a.day) || a.i - b.i);
+    const started = dated.filter(x => x.started);
+    const latest = started.length ? { entry: started[0].entry, date: started[0].date } : null;
+    const earlier = started.slice(1);
+    const fresh = !!returning && latest !== null && seen !== latest.entry.id;
+    const seenAt = earlier.findIndex(x => x.entry.id === seen);
+    const missed = fresh && seenAt > 0 ? earlier.slice(0, seenAt) : [];
+    return {
+      latest,
+      latestOpen: fresh,
+      horizon: dated.filter(x => !x.started).reverse() // soonest first
+        .map(x => ({ entry: x.entry, date: x.date }))
+        .concat((news.planned || []).map(entry => ({ entry, date: null }))),
+      earlier: earlier.map(x => ({ entry: x.entry, date: x.date, open: missed.includes(x) })),
+      earlierOpen: missed.length > 0,
+    };
   }
 
   function htmlUrl(p) {
@@ -517,10 +582,10 @@ const RetractleCore = (() => {
   }
 
   return {
-    COMMON, norm, isCommon, useLemmas, related, tokenize, guessParts,
+    COMMON, norm, isCommon, useLemmas, related, tokenize, cleanGuess, guessParts,
     typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, EPOCH, SEED, ERAS,
     shuffledOrder, dayNumber, dayOfDate, eraIndex, eraPool, paperForDay,
-    poolForDay, htmlUrl, absUrl, extractBlocks, paperLicense, isPaper,
+    poolForDay, newsParts, htmlUrl, absUrl, extractBlocks, paperLicense, isPaper,
   };
 })();
 
