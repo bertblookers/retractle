@@ -167,7 +167,12 @@
 
 .tag { font-weight: bold; }
 
-/* a redacted word: a black bar as wide as the word, roughly */
+/* a redacted word: a black bar as wide as the word, roughly, showing its
+   number of characters (every bar: user, 08-10-2026; .count is set once the
+   bar comes near the screen, see numberNear in retractle.js). The number is
+   drawn over the bar, so it never moves the text; it keeps a readable size
+   in small type (captions, subscripts in maths). Inside maths the bar sits
+   in its MathML token, which keeps the maths layout. */
 span.r {
   display: inline-block;
   width: calc(var(--len) * 0.56em);
@@ -175,7 +180,6 @@ span.r {
   background: var(--bar);
   border-radius: 2px;
   vertical-align: -0.12em;
-  cursor: pointer;
   position: relative;
 }
 span.r.count::after {
@@ -186,11 +190,15 @@ span.r.count::after {
   align-items: center;
   justify-content: center;
   color: #fff;
-  font: 600 0.62em "Segoe UI", system-ui, sans-serif;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-style: normal;
+  font-weight: 600;
+  font-size: max(0.62em, 0.6rem);
+  line-height: 1;
 }
 
-/* a redacted word inside maths: its block characters, solid black (a
-   MathML token keeps its maths layout, so no inline-block bar here) */
+/* an older retractle.js's maths bar (block characters), in a deploy's
+   mixed cache */
 math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
 
 /* restored words; .given = shown at the end, not restored by the player */
@@ -213,6 +221,22 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
 }
 
 .guess-form { display: flex; gap: 0.4rem; }
+/* what's typed, counted as the bars count it ("6", "5-5"), at the field's
+   right end: drawn over the field, so nothing moves */
+.guess-field { flex: 1; min-width: 0; display: flex; position: relative; }
+.guess-length {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 50%;
+  overflow: hidden;
+  color: var(--dim);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .guess-form input {
   flex: 1;
   min-width: 0;

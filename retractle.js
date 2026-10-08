@@ -69,17 +69,26 @@
 
   /* ============ drawing the paper ============ */
 
-  // a redacted word joins the puzzle: `el` is its bar, restored in place
-  function addToken(w, el) {
-    const n = C.norm(w);
-    el.setAttribute("class", "r");
-    el.setAttribute("data-i", tokens.length);
+  // A redacted word joins the puzzle as a black bar about as wide as the
+  // word, showing its number of characters (every bar: user, 08-10-2026;
+  // the number is drawn once the bar comes near the screen, see
+  // numberNear). The bar is restored in place. In maths too it is this HTML
+  // bar, inside its MathML token (Chrome draws no ::after on a MathML
+  // element, Firefox draws it in the token's flow).
+  function bar(w) {
+    const len = [...w].length;
+    const el = document.createElement("span");
+    el.className = "r";
+    el.dataset.len = len;
+    el.style.setProperty("--len", len);
     // for screen readers: a bar is "redacted, 6 characters"
     el.setAttribute("role", "img");
-    el.setAttribute("aria-label", `redacted, ${w.length} character${w.length === 1 ? "" : "s"}`);
+    el.setAttribute("aria-label", `redacted, ${len} character${len === 1 ? "" : "s"}`);
+    const n = C.norm(w);
     if (!byNorm.has(n)) byNorm.set(n, []);
     byNorm.get(n).push(tokens.length);
     tokens.push({ w, n, el });
+    return el;
   }
 
   const hidden = w => !C.isCommon(C.norm(w));
@@ -89,12 +98,7 @@
       if (part.t !== undefined) {
         into.append(part.t);
       } else if (part.w !== undefined) {
-        if (!hidden(part.w)) { into.append(part.w); continue; }
-        const el = document.createElement("span");
-        el.dataset.len = part.w.length;
-        el.style.setProperty("--len", part.w.length);
-        addToken(part.w, el);
-        into.append(el);
+        into.append(hidden(part.w) ? bar(part.w) : part.w);
       } else if (part.tag !== undefined) {
         const el = document.createElement("span");
         el.className = "tag";
@@ -109,9 +113,9 @@
   }
 
   // maths, drawn as MathML from core.js's plain data (mathTree). A token
-  // with a redacted word in it becomes a row of tokens, the word's a bar of
-  // block characters as long as the word; the rest keeps its text, its
-  // spaces made non-breaking so MathML doesn't trim them away.
+  // with a redacted word in it becomes a row of tokens, the word's holding
+  // its bar; the rest keeps its text, its spaces made non-breaking so MathML
+  // doesn't trim them away.
   const MATHML = "http://www.w3.org/1998/Math/MathML";
   function mathEl(name, attrs, text) {
     const el = document.createElementNS(MATHML, name);
@@ -138,8 +142,8 @@
     for (const p of node.parts) {
       if (p.w !== undefined && hidden(p.w)) {
         flush();
-        const el = mathEl(node.m, node.a, "█".repeat([...p.w].length));
-        addToken(p.w, el);
+        const el = mathEl(node.m, node.a);
+        el.append(bar(p.w));
         row.append(el);
       } else {
         text += p.w ?? p.t;
@@ -170,8 +174,6 @@
     const title = $("paper-title");
     title.replaceChildren();
     addParts(C.tokenize(paper.title), title);
-    // the title's bars always show their length, as in Redactle
-    for (const el of title.querySelectorAll(".r")) el.classList.add("count");
     const body = $("paper-body");
     body.replaceChildren();
     for (const b of blocks) {
@@ -197,6 +199,26 @@
       }
       if (el) body.append(el);
     }
+    for (const el of title.querySelectorAll("span.r")) el.classList.add("count");
+    numberNear(body.children);
+  }
+
+  // A bar shows its number once it has the class `count`: the title's at
+  // once, the paper's when their block comes within a screen's height of the
+  // view. Drawing all numbers at once made a long paper's first render about
+  // 1.5x slower (1201.2434: 74,205 bars; review of 08-10-2026, timings in
+  // notes/render-speed.md). The number lies over its bar, so drawing it
+  // late moves nothing. (An older retractle.css draws exactly the bars with
+  // `count`, so a deploy's mixed cache still shows them.)
+  function numberNear(blocks) {
+    const number = el => { for (const b of el.querySelectorAll("span.r")) b.classList.add("count"); };
+    if (typeof IntersectionObserver === "undefined") { for (const el of blocks) number(el); return; }
+    const near = new IntersectionObserver(entries => {
+      for (const e of entries) {
+        if (e.isIntersecting) { number(e.target); near.unobserve(e.target); }
+      }
+    }, { rootMargin: "100% 0px" });
+    for (const el of blocks) if (el.querySelector("span.r")) near.observe(el);
   }
 
   // every token a guess restores (its plural/singular too)
@@ -498,6 +520,7 @@
         $("guess-input").disabled = false;
         $("guess-submit").disabled = false;
         $("give-up").hidden = false;
+        showLength(); // a browser may have kept the field's text over a reload
         $("guess-input").focus();
       }
     } catch (e) {
@@ -526,18 +549,29 @@
     st.append(retry);
   }
 
+  // What's typed, counted as the bars count it (user, 08-10-2026: "5-5" for
+  // "light-curve"), at the field's right end, after every change: typing,
+  // deleting, pasting, cutting, the field cleared after a guess. Hidden
+  // while the field is empty; the text keeps clear of it.
+  function showLength() {
+    const input = $("guess-input");
+    const out = $("guess-length");
+    // an older index.html or core.js (a deploy's mixed cache): no count
+    if (!out || !C.typedLengths) return;
+    const text = C.typedLengths(input.value);
+    out.textContent = text;
+    out.hidden = !text;
+    input.style.paddingRight = text ? `calc(${out.offsetWidth}px + 1rem)` : "";
+  }
+  $("guess-input").addEventListener("input", showLength);
+
   $("guess-form").addEventListener("submit", e => {
     e.preventDefault();
     const input = $("guess-input");
     guess(input.value);
     input.value = "";
+    showLength();
     input.focus();
-  });
-
-  // a black bar shows how many characters it hides (the title's always do)
-  $("paper").addEventListener("click", e => {
-    const el = e.target.closest("span.r"); // a bar in maths shows its length already
-    if (el && !el.closest("#paper-title")) el.classList.toggle("count");
   });
 
   $("give-up").addEventListener("click", () => {

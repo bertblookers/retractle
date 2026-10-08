@@ -122,6 +122,27 @@ const RetractleCore = (() => {
     return { error: "One word at a time: letters and digits only" };
   }
 
+  // What the guess field shows while the player types (user, 08-10-2026):
+  // each word typed becomes its number of characters, counted as the bars
+  // count the paper's words (tokenize, then characters), so a typed word
+  // matches its bar: "galaxy" "6", "2048" "4", "light-curve" "5-5",
+  // "Hubble's" "6'1", "dark matter" "4 6". Spaces and quotes at the ends
+  // are dropped as in guessParts, a run of spaces is one; "" without a word.
+  // At most TYPED_MAX characters, so it fits the field: a longer count (a
+  // pasted sentence) keeps its end, the word being typed, after "…".
+  const TYPED_MAX = 10;
+  function typedLengths(input) {
+    const raw = input.normalize("NFC").trim().replace(/^['’‘"“”.]+|['’‘"“”.]+$/g, "").replace(/\s+/g, " ");
+    const parts = tokenize(raw);
+    if (!parts.some(p => p.w !== undefined)) return "";
+    const pieces = parts.map(p => p.w !== undefined ? String([...p.w].length) : p.t);
+    if (pieces.join("").length <= TYPED_MAX) return pieces.join("");
+    // whole pieces from the end; it starts with a number, not a separator
+    let tail = "";
+    while ((pieces.at(-1) + tail).length < TYPED_MAX) tail = pieces.pop() + tail;
+    return "…" + tail.replace(/^\D+/, "");
+  }
+
   // One word -> { n } (the normalised word) or { error }. Only the same
   // word again is refused here; another form of an earlier guess is up to
   // the page, which knows whether it would still restore anything (`twinOf`).
@@ -497,7 +518,7 @@ const RetractleCore = (() => {
 
   return {
     COMMON, norm, isCommon, useLemmas, related, tokenize, guessParts,
-    checkGuess, twinOf, titleWords, isSolved, accuracy, EPOCH, SEED, ERAS,
+    typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, EPOCH, SEED, ERAS,
     shuffledOrder, dayNumber, dayOfDate, eraIndex, eraPool, paperForDay,
     poolForDay, htmlUrl, absUrl, extractBlocks, paperLicense, isPaper,
   };

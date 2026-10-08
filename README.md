@@ -10,8 +10,8 @@ blacked out, except small words like *the*, *of* and *and*. Guess a word and
 it is restored everywhere it appears, in all its forms (observe, observed,
 observing; galaxy, galaxies). Restore every word of the title to win. Your
 score is the number of guesses and the share of them that restored
-something. The title's black bars show how many characters they hide; click
-any other bar to see its length.
+something. Each black bar shows how many characters it hides, and the
+guess box counts what you type the same way.
 
 None of these papers was really retracted: they are well-known, well-loved
 papers, and the "retraction" is only the game's story.

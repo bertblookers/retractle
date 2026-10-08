@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retractle — Restore the retracted paper</title>
 <meta name="description" content="Restore a famous astronomy paper word by word. A work in progress.">
-<link rel="stylesheet" href="shared.css?v=e24e4052b7">
-<link rel="stylesheet" href="retractle.css?v=e24e4052b7">
+<link rel="stylesheet" href="shared.css?v=7a519ea0bf">
+<link rel="stylesheet" href="retractle.css?v=7a519ea0bf">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -28,15 +28,15 @@
   <ul>
     <li>Guess a word: it is restored everywhere it appears in the paper, in
       all its forms (observe, observed, observing; galaxy, galaxies).</li>
-    <li>Restore every word of the title to win. The title's black bars show
-      how many characters they hide.</li>
+    <li>Restore every word of the title to win. Each black bar shows how
+      many characters it hides, and the guess box counts what you type the
+      same way.</li>
     <li>Small words (the, of, and, is, with…) were never redacted. Numbers
       were.</li>
     <li>Formulas are shown as in the paper. Their words and their longer
       numbers are redacted too; symbols, short numbers and one-letter
       variables are not.</li>
-    <li>Click a black bar to see how many characters it hides; click a guess
-      in the list to jump through its places.</li>
+    <li>Click a guess in the list to jump through its places.</li>
     <li>A new paper every day at midnight. The papers are famous, well-loved
       astronomy papers from <a href="https://arxiv.org" target="_blank"
       rel="noopener">arXiv</a>; none of them was really retracted.</li>
@@ -57,8 +57,11 @@
   <aside class="panel" id="panel">
     <section id="result" class="result" hidden></section>
     <form id="guess-form" class="guess-form" autocomplete="off">
-      <input id="guess-input" type="text" inputmode="text" autocapitalize="off"
-        spellcheck="false" placeholder="Guess a word" aria-label="Guess a word" disabled>
+      <span class="guess-field">
+        <input id="guess-input" type="text" inputmode="text" autocapitalize="off"
+          spellcheck="false" placeholder="Guess a word" aria-label="Guess a word" disabled>
+        <span id="guess-length" class="guess-length" aria-hidden="true" hidden></span>
+      </span>
       <button id="guess-submit" type="submit" disabled>Restore</button>
     </form>
     <p id="message" class="message" role="status"></p>
@@ -83,9 +86,9 @@
   <a href="https://github.com/bertblookers/retractle" target="_blank" rel="noopener">Source</a> (AGPL-3.0)
 </footer>
 
-<script src="papers.js?v=e24e4052b7"></script>
-<script src="lemmas.js?v=e24e4052b7"></script>
-<script src="core.js?v=e24e4052b7"></script>
-<script src="retractle.js?v=e24e4052b7"></script>
+<script src="papers.js?v=7a519ea0bf"></script>
+<script src="lemmas.js?v=7a519ea0bf"></script>
+<script src="core.js?v=7a519ea0bf"></script>
+<script src="retractle.js?v=7a519ea0bf"></script>
 </body>
 </html>
