@@ -40,23 +40,62 @@
     try { return JSON.parse(localStorage.getItem(key)) || null; } catch { return null; }
   }
 
+  // A game's save: "ok", "full" (no room left: every game on this site
+  // shares the browser's storage) or "failed" (a private window, storage
+  // blocked: play on unsaved, as before).
+  function write(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return "ok";
+    } catch (e) {
+      return e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+        e.code === 22 || e.code === 1014) ? "full" : "failed";
+    }
+  }
+  // The full play history is kept, never pruned (user, 09-10-2026;
+  // notes/archive-storage.md): if a game can't be saved for lack of room,
+  // the page says so plainly instead of losing it silently, until a save
+  // of this game goes through again.
+  function storageFull(full) {
+    const note = $("storage-note");
+    if (!note || note.hidden === !full) return; // an older index.html has none
+    note.textContent = full ? "Your browser's storage for this site is full, so this game can't be saved." : "";
+    note.hidden = !full;
+  }
+  // an earlier day's daily that couldn't move to the archive for lack of
+  // room (keepPastDaily): it keeps the daily save, so today's isn't saved
+  // over it
+  let held = false;
+
   // Each day keeps its own game: today's daily in DAILY_KEY, an earlier
   // day's (played from the navigator) in the archive, by day; an earlier
-  // day's game is kept there only once it has a guess or an end.
+  // day's game is kept there only once it has a guess or an end. A daily
+  // is today's only while the clock still shows its day and DAILY_KEY
+  // holds no later day's game: a page left open past midnight, or a clock
+  // set back, keeps its game in the archive instead of writing over a
+  // newer one (pre-push review of 09-10-2026, A1).
+  function saveKey() {
+    if (practice) return PRACTICE_KEY;
+    if (day !== today || C.dayNumber() !== day) return ARCHIVE_KEY;
+    const s = load(DAILY_KEY);
+    return validSave(s) && Number.isInteger(s.day) && s.day > day && (s.guesses.length || s.done)
+      ? ARCHIVE_KEY : DAILY_KEY;
+  }
   function save() {
     clock();
     const entry = { id: paper.id, v: paper.v, guesses, done };
     if (!practice) entry.day = day;
     if (elapsed !== null) entry.ms = Math.round(elapsed);
-    try {
-      if (practice) localStorage.setItem(PRACTICE_KEY, JSON.stringify(entry));
-      else if (day === today) localStorage.setItem(DAILY_KEY, JSON.stringify(entry));
-      else if (guesses.length || done) {
-        const a = loadArchive();
-        a[day] = entry;
-        localStorage.setItem(ARCHIVE_KEY, JSON.stringify(a));
-      }
-    } catch { /* private window: play on unsaved */ }
+    const key = saveKey();
+    let r = null;
+    if (key === PRACTICE_KEY) r = write(PRACTICE_KEY, JSON.stringify(entry));
+    else if (key === DAILY_KEY) r = held ? "full" : write(DAILY_KEY, JSON.stringify(entry));
+    else if (guesses.length || done) {
+      const a = loadArchive();
+      a[day] = entry;
+      r = write(ARCHIVE_KEY, JSON.stringify(a));
+    }
+    if (r !== null && r !== "failed") storageFull(r === "full");
   }
 
   // How long the game took (user, 09-10-2026; the measure is Claude's
@@ -78,16 +117,14 @@
   function keepTime() {
     clock();
     if (elapsed === null || done || !guesses.length) return;
-    try {
-      const key = practice ? PRACTICE_KEY : day === today ? DAILY_KEY : ARCHIVE_KEY;
-      const all = key === ARCHIVE_KEY ? loadArchive() : null;
-      const s = all ? all[day] : load(key);
-      if (!validSave(s) || s.id !== paper.id || s.v !== paper.v || (!practice && s.day !== day) ||
-          s.done || s.guesses.join() !== guesses.join()) return;
-      s.ms = Math.round(elapsed);
-      if (all) all[day] = s;
-      localStorage.setItem(key, JSON.stringify(all || s));
-    } catch { /* unsaved */ }
+    const key = saveKey();
+    const all = key === ARCHIVE_KEY ? loadArchive() : null;
+    const s = all ? all[day] : load(key);
+    if (!validSave(s) || s.id !== paper.id || s.v !== paper.v || (!practice && s.day !== day) ||
+        s.done || s.guesses.join() !== guesses.join()) return;
+    s.ms = Math.round(elapsed);
+    if (all) all[day] = s;
+    if (write(key, JSON.stringify(all || s)) === "full") storageFull(true);
   }
   document.addEventListener("visibilitychange", () => {
     if (!ready) return;
@@ -110,7 +147,11 @@
 
   // The daily save is taken over by the next day's daily, so an earlier
   // day's game in it moves to the archive first (unless the archive holds
-  // a game of that day already: played from the navigator, so newer).
+  // a game of that day already: played from the navigator, or saved there
+  // by a page left open past midnight, so newer). A later day's game in it
+  // (a clock set back) stays: saveKey saves today's beside it. If
+  // there is no room for it, it stays where it is and today's game isn't
+  // saved over it (held), and the page says so.
   function keepPastDaily() {
     const s = load(DAILY_KEY);
     if (!validSave(s) || !Number.isInteger(s.day) || s.day < 0 || s.day >= today) return;
@@ -118,7 +159,7 @@
     const a = loadArchive();
     if (saveOfDay(a[s.day], s.day) || !saveOfDay(s, s.day)) return;
     a[s.day] = s;
-    try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(a)); } catch { /* unsaved */ }
+    held = write(ARCHIVE_KEY, JSON.stringify(a)) === "full";
   }
 
   function findPaper(id, v) {
@@ -149,9 +190,10 @@
       if (p) return { p, s };
       return { p: randomPaper(), s: null };
     }
+    // the archive's first: newer than one left in the daily save (played
+    // from the navigator, or saved there by saveKey)
     const p = C.paperForDay(RETRACTLE_PAPERS, day);
-    const kept = day < today && saveOfDay(loadArchive()[day], day);
-    return { p, s: kept || saveOfDay(load(DAILY_KEY), day) };
+    return { p, s: saveOfDay(loadArchive()[day], day) || saveOfDay(load(DAILY_KEY), day) };
   }
 
   /* ============ the puzzle navigator ============ */
@@ -875,11 +917,21 @@
     revealFigures(true);
     showResult();
     save();
-    // said in the status line (screen readers hear it, with the time in
-    // words: pre-push review of 09-10-2026, B4), and the keyboard lands on
-    // the result's first button instead of the closed input
-    const took = how === "won" && elapsed !== null && C.playTimeWords ? ` in ${C.playTimeWords(elapsed)}` : "";
-    say(how === "won" ? `Restored to the archive${took}!` : `The paper was: ${paper.title}`);
+    // said in the status line, and the keyboard lands on the result's
+    // first button instead of the closed input. A screen reader hears the
+    // time too, in words (pre-push review of 09-10-2026, B4); sighted
+    // players see it once, in the result (re-check of 09-10-2026, R2). The
+    // two versions sit side by side, each whole: a hidden part inside the
+    // sentence lost its leading space in the accessibility tree ("archivein
+    // 12 minutes", pre-push review of 09-10-2026, B1)
+    if (how === "won" && elapsed !== null && C.playTimeWords) {
+      const shown = document.createElement("span"), heard = document.createElement("span");
+      shown.setAttribute("aria-hidden", "true");
+      shown.textContent = "Restored to the archive!";
+      heard.className = "visually-hidden";
+      heard.textContent = `Restored to the archive in ${C.playTimeWords(elapsed)}!`;
+      $("message").replaceChildren(shown, heard);
+    } else say(how === "won" ? "Restored to the archive!" : `The paper was: ${paper.title}`);
     const first = $("result").querySelector("button");
     if (first) first.focus();
   }
@@ -917,8 +969,10 @@
 
   function shareText() {
     const name = practice ? "Retractle practice" : `Retractle #${day}`;
-    // an earlier day's puzzle is shared with its number, so the link opens it
-    const url = location.origin + location.pathname + (!practice && day < today ? `?p=${day}` : "");
+    // a daily is shared with its number, so the link opens that puzzle, on
+    // any later day too (today's as well: user, 09-10-2026). A share never
+    // hints at the answer (the family's rule): no word guessed, no title.
+    const url = location.origin + location.pathname + (practice ? "" : `?p=${day}`);
     return `${name}: paper restored in ${guesses.length} guesses (${C.accuracy(hits)}% accuracy)\n${url}`;
   }
 
@@ -987,6 +1041,8 @@
   function newPractice() {
     const p = randomPaper(paper);
     try {
+      // the game left goes first, so a full storage can't keep it in play
+      localStorage.removeItem(PRACTICE_KEY);
       localStorage.setItem(PRACTICE_KEY, JSON.stringify({ id: p.id, v: p.v, guesses: [], done: null }));
     } catch { /* unsaved: the reload picks another random paper */ }
     location.reload();
@@ -995,13 +1051,16 @@
   /* ============ Settings ============ */
 
   // Settings (user, 09-10-2026), as Muldle's: a dialog behind the gear, top
-  // right. Smooth jumps (the glide) on by default; off, the jumps are
-  // instant and the paper draws only near the view (jumpTo, and the
-  // stylesheet's .glide-off). Kept in this browser only.
+  // right. Smooth jumps (the glide): on by default with a mouse or
+  // trackpad, off on a touch screen (core.js's glideOn), the player's own
+  // choice first; off, the jumps are instant and the paper draws only near
+  // the view (jumpTo, and the stylesheet's .glide-off). Kept in this
+  // browser only, once the player switches it.
   let glide = true;
   function setUpSettings() {
     const kept = load(SETTINGS_KEY);
-    glide = !(kept && kept.glide === false);
+    // an older core.js (a deploy's mixed cache): on unless switched off
+    glide = C.glideOn ? C.glideOn(kept, matchMedia(C.TOUCH_ONLY).matches) : !(kept && kept.glide === false);
     document.documentElement.classList.toggle("glide-off", !glide);
     const dialog = $("settings"), button = $("settings-button"), box = $("glide-toggle");
     if (!dialog || !button || !box || !dialog.showModal) return; // an older index.html

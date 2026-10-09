@@ -328,9 +328,15 @@
 
 /* maths as in the paper: inline in the line, displayed equations on lines
    of their own (MathML, drawn by the browser); a formula too wide for the
-   screen scrolls in its own box instead of the page */
-.paper-body .has-math { overflow-x: auto; overflow-y: hidden; }
-.paper-body .equation { margin: 0.5rem 0 0.9rem; overflow-x: auto; overflow-y: hidden; }
+   screen scrolls in its own box instead of the page. A scroll box clips at
+   its padding, so it gets 4px of it on each side, and its text stays where
+   it was: room for the current place's outline (3px out) around a word at
+   the box's edge (re-check of 09-10-2026, R1: a word starting a line lost
+   its frame's left side). On phones the -4px stays inside .paper's
+   padding. A caption has room on its left already (its own padding). */
+.paper-body .has-math { overflow-x: auto; overflow-y: hidden; padding-right: 4px; margin-right: -4px; }
+.paper-body .has-math:not(.caption) { padding-left: 4px; margin-left: -4px; }
+.paper-body .equation { margin: 0.5rem -4px 0.9rem; padding-inline: 4px; overflow-x: auto; overflow-y: hidden; }
 .paper-body .equation table { width: 100%; border-collapse: collapse; }
 .paper-body .equation td { padding: 0.15rem 0.1rem; vertical-align: middle; white-space: nowrap; }
 .paper-body .equation td.pad { width: 50%; }
@@ -379,10 +385,8 @@ span.r.count::after {
    clips at the block's edge, so the current place's outline (3px out) gets
    room to show (pre-push review of 09-10-2026, A2: a word starting a line
    lost its frame's left side; a browser that doesn't widen paint
-   containment with overflow-clip-margin still clips it). Not yet in a
-   block with maths (.has-math, .equation): it scrolls, and a scroll box
-   clips at its padding, glide on or off (re-check of 09-10-2026, R1;
-   next-session.md Backlog #12). */
+   containment with overflow-clip-margin still clips it). A block with
+   maths scrolls and has room of its own (above). */
 .glide-off .paper-body > * { content-visibility: auto; contain-intrinsic-size: auto 3em; overflow-clip-margin: 4px; }
 
 /* print: every bar black with its number, the ones never scrolled near the
@@ -499,6 +503,21 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
 .guess-form button:disabled { opacity: 0.4; cursor: default; }
 
 .message { min-height: 1.3em; font-size: 0.92rem; }
+/* a game that can't be saved for lack of room, said plainly */
+.storage-note { font-size: 0.88rem; border-left: 3px solid var(--warn); padding-left: 0.5rem; }
+/* text for screen readers only; no negative margin, which can make
+   VoiceOver on macOS read it out of order (GOV.UK Frontend dropped it) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .score { color: var(--dim); font-size: 0.88rem; }
 
 .guesses-box { min-height: 0; overflow: auto; }
@@ -558,6 +577,7 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
   .guesses-box { max-height: 26vh; }
   /* the feedback above the input: an on-screen keyboard covers what's below */
   .message { order: -1; }
+  .storage-note { order: -2; }
   /* tap targets of at least about 24 px */
   .link-button, .help summary, .guesses-box summary { padding: 0.4rem 0; }
   .news .news-part, .news .news-entry { margin-top: 0.1rem; margin-bottom: 0.1rem; }

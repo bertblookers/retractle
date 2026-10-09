@@ -238,6 +238,17 @@ const RetractleCore = (() => {
   const playTime = ms => timeIn(ms, (n, short) => `${n} ${short}`);
   const playTimeWords = ms => timeIn(ms, (n, short, long) => `${n} ${long}${n === 1 ? "" : "s"}`);
 
+  /* ============ Settings ============ */
+
+  // Smooth jumps (the glide): the player's own choice wins; without one, on
+  // with a mouse or trackpad and off on a touch screen (user, 09-10-2026:
+  // on by default on desktop, off on mobile), told apart by the primary
+  // pointer (TOUCH_ONLY, a media query: phones and tablets match it).
+  const TOUCH_ONLY = "(hover: none) and (pointer: coarse)";
+  function glideOn(kept, touchOnly) {
+    return kept && typeof kept.glide === "boolean" ? kept.glide : !touchOnly;
+  }
+
   /* ============ the daily paper ============ */
 
   // Puzzle #0 is 2026-10-08, launch day (moved from 2026-10-07, the day the
@@ -496,12 +507,7 @@ const RetractleCore = (() => {
         return sym ? { m: "mo", a: {}, parts: [{ t: sym }] } : null;
       }
       if (name === "mo" && (key === "open" || key === "close")) return null;
-      let parts;
-      if (name === "mtext" || name === "ms") parts = tokenize(text);
-      else if (name === "mn") parts = tokenize(text).map(p => p.w && [...p.w].length < 3 ? { t: p.w } : p);
-      else if (MATH_WORD.test(text) && !MATH_FUNCTIONS.has(key)) parts = [{ w: text }];
-      else parts = [{ t: text }];
-      return { m: name, a, parts };
+      return { m: name, a, parts: mathParts(name, text) };
     }
     const c = [];
     for (const child of el.children) {
@@ -510,6 +516,19 @@ const RetractleCore = (() => {
     }
     // an element off the list keeps its content, as a plain row
     return MATH_LAYOUT.has(name) ? { m: name, a, c } : { m: "mrow", a: {}, c };
+  }
+
+  // A maths token's text -> parts, as the text's: { w } a word (redacted
+  // unless it is a small word, as in the text), { t } shown as it is. An
+  // mtext or ms is split like a sentence; a number keeps its runs of one or
+  // two digits shown; an identifier or operator is one word if it has two
+  // characters or more with a letter and names no function ("eff",
+  // "N4258", not "log" or "x"). How to play says this (test_logic pins it).
+  function mathParts(name, text) {
+    if (name === "mtext" || name === "ms") return tokenize(text);
+    if (name === "mn") return tokenize(text).map(p => p.w && [...p.w].length < 3 ? { t: p.w } : p);
+    if (MATH_WORD.test(text) && !MATH_FUNCTIONS.has(norm(text).trim())) return [{ w: text }];
+    return [{ t: text }];
   }
 
   // a displayed equation (a LaTeXML equation table): its rows of cells, each
@@ -681,9 +700,10 @@ const RetractleCore = (() => {
 
   return {
     COMMON, norm, isCommon, useLemmas, related, tokenize, cleanGuess, guessParts,
-    typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, restoredShare, timeOfSave, playTime, playTimeWords, EPOCH, SEED, ERAS,
+    typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, restoredShare, timeOfSave, playTime, playTimeWords,
+    TOUCH_ONLY, glideOn, EPOCH, SEED, ERAS,
     shuffledOrder, dayNumber, dayOfDate, puzzleFromQuery, eraIndex, eraPool, paperForDay,
-    poolForDay, newsParts, htmlUrl, absUrl, figureUrl, FIGURE_SHARE, figureRevealed,
+    poolForDay, newsParts, htmlUrl, absUrl, figureUrl, FIGURE_SHARE, figureRevealed, mathParts,
     extractBlocks, paperLicense, isPaper,
   };
 })();

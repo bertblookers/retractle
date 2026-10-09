@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retractle — Restore the retracted paper</title>
 <meta name="description" content="Restore a famous astronomy paper word by word. A work in progress.">
-<link rel="stylesheet" href="shared.css?v=ed066617c7">
-<link rel="stylesheet" href="retractle.css?v=ed066617c7">
+<link rel="stylesheet" href="shared.css?v=c075b4eccd">
+<link rel="stylesheet" href="retractle.css?v=c075b4eccd">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -100,6 +100,8 @@
 
   <aside class="panel" id="panel">
     <section id="result" class="result" hidden></section>
+    <!-- said when a game can't be saved for lack of room (retractle.js) -->
+    <p id="storage-note" class="storage-note" role="alert" hidden></p>
     <form id="guess-form" class="guess-form" autocomplete="off">
       <span class="guess-field">
         <input id="guess-input" type="text" inputmode="text" autocapitalize="off"
@@ -130,10 +132,10 @@
   <a href="https://github.com/bertblookers/retractle" target="_blank" rel="noopener">Source</a> (AGPL-3.0)
 </footer>
 
-<script src="papers.js?v=ed066617c7"></script>
-<script src="lemmas.js?v=ed066617c7"></script>
-<script src="core.js?v=ed066617c7"></script>
-<script src="news.js?v=ed066617c7"></script>
-<script src="retractle.js?v=ed066617c7"></script>
+<script src="papers.js?v=c075b4eccd"></script>
+<script src="lemmas.js?v=c075b4eccd"></script>
+<script src="core.js?v=c075b4eccd"></script>
+<script src="news.js?v=c075b4eccd"></script>
+<script src="retractle.js?v=c075b4eccd"></script>
 </body>
 </html>

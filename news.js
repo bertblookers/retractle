@@ -17,12 +17,22 @@
 const RETRACTLE_NEWS = {
   updates: [
     {
-      id: "time-settings", // drafted 09-10-2026; went live with the release the user approved that day
+      id: "share-phones", // drafted 09-10-2026; went live with the release the user approved that day
+      date: { y: 2026, m: 10, d: 9 },
+      title: "Shared links, and jumps on phones",
+      items: [
+        "The link in a shared result opens that same paper, also on a later day.",
+        "On phones and tablets, jumps to a guess's places are instant unless you turn on smooth jumps in Settings (⚙).",
+      ],
+    },
+    {
+      id: "time-settings", // drafted 09-10-2026; went live with the release the user approved that day;
+      // item 2 reworded the same day, true whatever the default (user, 09-10-2026: off by default on phones)
       date: { y: 2026, m: 10, d: 9 },
       title: "Your time, and Settings",
       items: [
         "A restored paper shows how long you took: the time the page was open and in view, from your first guess.",
-        "Settings (⚙, top right) can turn off the smooth scroll to a guess's places: jumps are then instant, and long papers open faster.",
+        "Settings (⚙, top right) switches the smooth scroll to a guess's places on or off. Off, jumps are instant and long papers open faster.",
       ],
     },
     {
