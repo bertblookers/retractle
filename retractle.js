@@ -9,6 +9,7 @@
   const ARCHIVE_KEY = "retractle-archive-v1"; // { "<day>": { day, id, v, guesses, done } }: earlier days'
   const PRACTICE_KEY = "retractle-practice-v1"; // { id, v, guesses, done }
   const NAV_KEY = "retractle-nav-focus";      // sessionStorage: the navigator's button pressed before a load
+  const SETTINGS_KEY = "retractle-settings-v1"; // { glide }: the player's settings
   const FETCH_TIMEOUT = 30000;
 
   const $ = id => document.getElementById(id);
@@ -29,6 +30,9 @@
   let selected = null;  // { i, pos }: the guess whose places are lit
   let license = null;   // { text, href }: the paper's license, from arXiv's page
   let restored = 0;     // places the guesses restored (not those shown at the end)
+  let elapsed = 0;      // ms of play so far (C.timeOfSave), or null: a game never timed
+  let since = null;     // performance.now() when the stretch being timed began
+  let ready = false;    // the game is set up: the clock runs only from then on
 
   /* ============ saves ============ */
 
@@ -40,8 +44,10 @@
   // day's (played from the navigator) in the archive, by day; an earlier
   // day's game is kept there only once it has a guess or an end.
   function save() {
+    clock();
     const entry = { id: paper.id, v: paper.v, guesses, done };
     if (!practice) entry.day = day;
+    if (elapsed !== null) entry.ms = Math.round(elapsed);
     try {
       if (practice) localStorage.setItem(PRACTICE_KEY, JSON.stringify(entry));
       else if (day === today) localStorage.setItem(DAILY_KEY, JSON.stringify(entry));
@@ -52,6 +58,43 @@
       }
     } catch { /* private window: play on unsaved */ }
   }
+
+  // How long the game took (user, 09-10-2026; the measure is Claude's
+  // default, which the user may change): the time the page is open and in
+  // view, from the first guess to the one that restores the paper, summed
+  // across visits (saved with the game as `ms`). Each call adds the
+  // stretch since the last and starts a new one while the game is being
+  // played and the page is in view.
+  function clock() {
+    const now = performance.now();
+    if (since !== null && elapsed !== null) elapsed += now - since;
+    since = ready && elapsed !== null && !done && guesses.length &&
+      document.visibilityState === "visible" ? now : null;
+  }
+  // The time so far, kept when the page is hidden or left: written into
+  // this game's save only while the save still holds this very game, so a
+  // game another tab played on, or the new paper "Another paper" chose,
+  // is left alone.
+  function keepTime() {
+    clock();
+    if (elapsed === null || done || !guesses.length) return;
+    try {
+      const key = practice ? PRACTICE_KEY : day === today ? DAILY_KEY : ARCHIVE_KEY;
+      const all = key === ARCHIVE_KEY ? loadArchive() : null;
+      const s = all ? all[day] : load(key);
+      if (!validSave(s) || s.id !== paper.id || s.v !== paper.v || (!practice && s.day !== day) ||
+          s.done || s.guesses.join() !== guesses.join()) return;
+      s.ms = Math.round(elapsed);
+      if (all) all[day] = s;
+      localStorage.setItem(key, JSON.stringify(all || s));
+    } catch { /* unsaved */ }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!ready) return;
+    if (document.visibilityState === "visible") clock();
+    else keepTime();
+  });
+  addEventListener("pagehide", () => { if (ready) keepTime(); });
 
   // earlier days' games, by day
   function loadArchive() {
@@ -703,13 +746,33 @@
       selected.pos = (selected.pos + 1) % places.length;
       const el = tokens[places[selected.pos]].el;
       el.classList.add("cur");
-      // no animated scroll for a player who asked for less motion (review
-      // of 08-10-2026; "auto" is instant, as no stylesheet sets
-      // scroll-behavior)
-      el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      jumpTo(el);
       say(`“${guesses[i]}”: ${selected.pos + 1} of ${places.length}`);
     }
     for (const tr of $("guess-list").children) tr.classList.toggle("sel", +tr.dataset.i === i);
+  }
+
+  // The jump to a guess's place: smooth, unless the player turned the glide
+  // off in Settings (user, 09-10-2026) or asked for less motion (review of
+  // 08-10-2026): then instant ("auto" is instant, as no stylesheet sets
+  // scroll-behavior). With the glide off the paper's blocks draw only near
+  // the view (content-visibility, Claude's proposal of 09-10-2026: a long
+  // paper's first screen about 2.5x faster, notes/render-speed.md); the
+  // blocks it passes take a guessed height until drawn, so the jump is
+  // made again in the next frames, as they get their real height.
+  let jumpSeq = 0;
+  function jumpTo(el) {
+    const smooth = glide && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
+    if (glide) return;
+    const seq = ++jumpSeq;
+    let frames = 0;
+    const again = () => {
+      if (seq !== jumpSeq) return; // a newer jump took over
+      el.scrollIntoView({ block: "center", behavior: "auto" });
+      if (++frames < 3) requestAnimationFrame(again);
+    };
+    requestAnimationFrame(again);
   }
 
   // A guess picked in the list, or guessed again (user, 08-10-2026: so the
@@ -807,13 +870,16 @@
 
   function finish(how) {
     done = how;
+    clock(); // stops: the time up to this guess
     revealRest();
     revealFigures(true);
     showResult();
     save();
-    // said in the status line (screen readers hear it), and the keyboard
-    // lands on the result's first button instead of the closed input
-    say(how === "won" ? "Restored to the archive!" : `The paper was: ${paper.title}`);
+    // said in the status line (screen readers hear it, with the time in
+    // words: pre-push review of 09-10-2026, B4), and the keyboard lands on
+    // the result's first button instead of the closed input
+    const took = how === "won" && elapsed !== null && C.playTimeWords ? ` in ${C.playTimeWords(elapsed)}` : "";
+    say(how === "won" ? `Restored to the archive${took}!` : `The paper was: ${paper.title}`);
     const first = $("result").querySelector("button");
     if (first) first.focus();
   }
@@ -862,7 +928,15 @@
     const head = document.createElement("p");
     head.className = "result-head";
     head.textContent = done === "won" ? "Restored to the archive!" : "The paper was:";
-    box.append(head, ...cite());
+    box.append(head);
+    // how long it took (user, 09-10-2026), for a game timed from its start
+    if (done === "won" && elapsed !== null && C.playTime) {
+      const time = document.createElement("p");
+      time.className = "result-time";
+      time.textContent = `Restored in ${C.playTime(elapsed)}`;
+      box.append(time);
+    }
+    box.append(...cite());
     const row = document.createElement("p");
     row.className = "result-actions";
     if (done === "won") {
@@ -916,6 +990,62 @@
       localStorage.setItem(PRACTICE_KEY, JSON.stringify({ id: p.id, v: p.v, guesses: [], done: null }));
     } catch { /* unsaved: the reload picks another random paper */ }
     location.reload();
+  }
+
+  /* ============ Settings ============ */
+
+  // Settings (user, 09-10-2026), as Muldle's: a dialog behind the gear, top
+  // right. Smooth jumps (the glide) on by default; off, the jumps are
+  // instant and the paper draws only near the view (jumpTo, and the
+  // stylesheet's .glide-off). Kept in this browser only.
+  let glide = true;
+  function setUpSettings() {
+    const kept = load(SETTINGS_KEY);
+    glide = !(kept && kept.glide === false);
+    document.documentElement.classList.toggle("glide-off", !glide);
+    const dialog = $("settings"), button = $("settings-button"), box = $("glide-toggle");
+    if (!dialog || !button || !box || !dialog.showModal) return; // an older index.html
+    box.checked = glide;
+    box.addEventListener("change", () => {
+      glide = box.checked;
+      keepPlace(() => document.documentElement.classList.toggle("glide-off", !glide));
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ glide })); } catch { /* unsaved */ }
+    });
+    $("settings-reduced").hidden = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    button.hidden = false;
+    button.addEventListener("click", () => dialog.showModal());
+    $("settings-close").addEventListener("click", () => dialog.close());
+    // a click on the backdrop (outside the dialog's box) closes it; only
+    // the dialog's own clicks count: a key's click on the checkbox (Space)
+    // comes at 0,0 (pre-push review of 09-10-2026, A1: it closed the dialog)
+    dialog.addEventListener("click", e => {
+      const r = dialog.getBoundingClientRect();
+      if (e.target === dialog &&
+        (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) dialog.close();
+    });
+  }
+
+  // Switching the glide changes the height of every block off screen (drawn
+  // only near the view, or all drawn), so the view would land far from where
+  // the player was reading (pre-push review of 09-10-2026, B2: the gear is
+  // at the top, but the page scrolls behind the open dialog). The first
+  // block reaching into the view is held where it was (the end of the paper,
+  // if the view is below it), now and in the next frames, as blocks near
+  // the view get their real height.
+  function keepPlace(change) {
+    const blocks = $("paper-body").children;
+    let el = [...blocks].find(b => b.getBoundingClientRect().bottom > 0);
+    const edge = el ? r => r.top : r => r.bottom;
+    el = el || blocks[blocks.length - 1];
+    if (!el) return change();
+    const at = edge(el.getBoundingClientRect());
+    change();
+    let frames = 0;
+    const hold = () => {
+      scrollBy({ top: edge(el.getBoundingClientRect()) - at, behavior: "instant" });
+      if (++frames < 4) requestAnimationFrame(hold);
+    };
+    hold();
   }
 
   /* ============ What's new ============ */
@@ -1042,6 +1172,9 @@
     paper = p;
     guesses = s ? s.guesses.slice() : [];
     done = s ? s.done : null;
+    // an older core.js (a deploy's mixed cache) keeps no time
+    elapsed = C.timeOfSave ? C.timeOfSave(s) : null;
+    setUpSettings();
     const navFocused = setUpNav();
     const pb = $("practice-button");
     pb.textContent = practice ? "Back to today's paper" : "Practice";
@@ -1079,6 +1212,8 @@
       }
       // the bars on screen show their numbers in the first paint
       numberInView();
+      ready = true;
+      clock(); // a game in play is timed from here while in view
     } catch (e) {
       // not arXiv's fault, and not the save's (validSave checked it): keep
       // the save, so a passing fault (a half-updated cache during a deploy)
@@ -1089,7 +1224,7 @@
       fail(`Something went wrong setting up the paper (${e.message}).`);
       return;
     }
-    window.__retractle = { paper, tokens, guesses: () => guesses, blocks, day, today,
+    window.__retractle = { paper, tokens, guesses: () => guesses, blocks, day, today, time: () => elapsed,
       figures: () => figures.map(f => ({ id: f.block.id, name: f.name, shown: f.shown, images: f.images.length, hidden: f.to - f.from })) };
   }
 

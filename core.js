@@ -214,6 +214,30 @@ const RetractleCore = (() => {
     return pct === 0 ? "<1%" : `${pct}%`;
   }
 
+  // How long a game took (user, 09-10-2026; how it is measured is Claude's
+  // default, which the user may change): the time the page was open and
+  // in view, from the first guess to the one that restored the paper,
+  // summed across visits. A save keeps it as `ms`. timeOfSave: the time a
+  // save holds, 0 for a game not begun, or null for a game begun before
+  // the time was kept (or a broken value): such a game is never timed.
+  function timeOfSave(s) {
+    if (s && Number.isFinite(s.ms) && s.ms >= 0) return s.ms;
+    return s && (s.guesses.length || s.done) ? null : 0;
+  }
+
+  // "under a minute", "12 min", "1 h 5 min", "2 h": whole minutes, rounded;
+  // playTimeWords in words, for a screen reader ("1 hour 5 minutes":
+  // pre-push review of 09-10-2026, B4, "h" and "min" are read out badly)
+  function timeIn(ms, unit) {
+    if (ms < 60000) return "under a minute";
+    const min = Math.round(ms / 60000);
+    if (min < 60) return unit(min, "min", "minute");
+    const h = Math.floor(min / 60), m = min % 60;
+    return m ? `${unit(h, "h", "hour")} ${unit(m, "min", "minute")}` : unit(h, "h", "hour");
+  }
+  const playTime = ms => timeIn(ms, (n, short) => `${n} ${short}`);
+  const playTimeWords = ms => timeIn(ms, (n, short, long) => `${n} ${long}${n === 1 ? "" : "s"}`);
+
   /* ============ the daily paper ============ */
 
   // Puzzle #0 is 2026-10-08, launch day (moved from 2026-10-07, the day the
@@ -657,7 +681,7 @@ const RetractleCore = (() => {
 
   return {
     COMMON, norm, isCommon, useLemmas, related, tokenize, cleanGuess, guessParts,
-    typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, restoredShare, EPOCH, SEED, ERAS,
+    typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, restoredShare, timeOfSave, playTime, playTimeWords, EPOCH, SEED, ERAS,
     shuffledOrder, dayNumber, dayOfDate, puzzleFromQuery, eraIndex, eraPool, paperForDay,
     poolForDay, newsParts, htmlUrl, absUrl, figureUrl, FIGURE_SHARE, figureRevealed,
     extractBlocks, paperLicense, isPaper,

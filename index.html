@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retractle — Restore the retracted paper</title>
 <meta name="description" content="Restore a famous astronomy paper word by word. A work in progress.">
-<link rel="stylesheet" href="shared.css?v=35b8bbdf61">
-<link rel="stylesheet" href="retractle.css?v=35b8bbdf61">
+<link rel="stylesheet" href="shared.css?v=ed066617c7">
+<link rel="stylesheet" href="retractle.css?v=ed066617c7">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -15,6 +15,10 @@
 <header class="top">
   <a class="hub-mark" href="../" title="All the daily sky puzzles">Urania’s Mirror</a>
   <h1>RETRACTLE</h1>
+  <!-- Settings, as Muldle's: the gear top right opens the dialog below
+       (retractle.js shows it) -->
+  <button type="button" id="settings-button" class="settings-button" aria-label="Settings"
+    title="Settings" aria-haspopup="dialog" hidden>&#9881;</button>
   <!-- the puzzle navigator, as Muldle's: « Puzzle #N », the days that have
        come only (retractle.js shows it; an older one fills the label) -->
   <p class="puzzle-line"><span id="puzzle-label"></span>
@@ -27,6 +31,18 @@
   <p class="wip-note"><strong>Work in progress.</strong> Future papers and
     the rules may still change; the papers of days already played won't.</p>
 </header>
+<dialog id="settings" class="settings-dialog" aria-labelledby="settings-title">
+  <button type="button" id="settings-close" class="settings-close" aria-label="Close">&times;</button>
+  <h2 id="settings-title">Settings</h2>
+  <label class="settings-toggle">
+    <input type="checkbox" id="glide-toggle" checked>
+    <span class="settings-toggle-text">Smooth jumps
+      <span>Scroll smoothly to a guess's places. Off: the jumps are instant,
+        and long papers open faster.</span></span>
+  </label>
+  <p id="settings-reduced" class="settings-note" hidden>Your device asks for
+    reduced motion, so the jumps are always instant.</p>
+</dialog>
 
 <details id="help" class="help">
   <summary>How to play</summary>
@@ -114,10 +130,10 @@
   <a href="https://github.com/bertblookers/retractle" target="_blank" rel="noopener">Source</a> (AGPL-3.0)
 </footer>
 
-<script src="papers.js?v=35b8bbdf61"></script>
-<script src="lemmas.js?v=35b8bbdf61"></script>
-<script src="core.js?v=35b8bbdf61"></script>
-<script src="news.js?v=35b8bbdf61"></script>
-<script src="retractle.js?v=35b8bbdf61"></script>
+<script src="papers.js?v=ed066617c7"></script>
+<script src="lemmas.js?v=ed066617c7"></script>
+<script src="core.js?v=ed066617c7"></script>
+<script src="news.js?v=ed066617c7"></script>
+<script src="retractle.js?v=ed066617c7"></script>
 </body>
 </html>

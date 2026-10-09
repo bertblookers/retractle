@@ -27,6 +27,70 @@
   top: 1.4rem;
 }
 
+/* Settings (user, 09-10-2026), as Muldle's: the gear top right, mirroring
+   the hub's mark, opens a dialog */
+.settings-button {
+  position: absolute;
+  right: 1rem;
+  top: 1.05rem;
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.15rem 0.25rem;
+  cursor: pointer;
+}
+.settings-button:hover, .settings-button:focus-visible { color: var(--text); }
+.settings-dialog {
+  margin: auto; /* centred: shared.css's reset takes the browser's margin */
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.2rem 1.4rem;
+  width: min(22rem, 90vw);
+}
+.settings-dialog::backdrop { background: #000b; }
+.settings-dialog h2 {
+  font-size: 1.05rem;
+  letter-spacing: 0.15em;
+  text-align: center;
+  margin-bottom: 0.9rem;
+}
+.settings-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.settings-toggle input { margin-top: 0.25rem; accent-color: var(--accent); }
+.settings-toggle-text span {
+  display: block;
+  margin-top: 2px;
+  color: var(--dim);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+.settings-note { color: var(--dim); font-size: 0.8rem; margin-top: 0.6rem; }
+.settings-close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.6rem;
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 1.3rem;
+  padding: 0.1rem 0.3rem;
+  cursor: pointer;
+}
+.settings-close:hover, .settings-close:focus-visible { color: var(--text); }
+
 .top h1 {
   font-size: 1.9rem;
   letter-spacing: 0.12em;
@@ -308,10 +372,26 @@ span.r.count::after {
   line-height: 1;
 }
 
+/* With the glide off (Settings), the paper's blocks are drawn only near the
+   view: a long paper's first screen about 2.5x faster (Claude's proposal,
+   09-10-2026; notes/render-speed.md). A block keeps its last drawn height
+   once seen. Not in print, which draws everything. Its paint containment
+   clips at the block's edge, so the current place's outline (3px out) gets
+   room to show (pre-push review of 09-10-2026, A2: a word starting a line
+   lost its frame's left side; a browser that doesn't widen paint
+   containment with overflow-clip-margin still clips it). Not yet in a
+   block with maths (.has-math, .equation): it scrolls, and a scroll box
+   clips at its padding, glide on or off (re-check of 09-10-2026, R1;
+   next-session.md Backlog #12). */
+.glide-off .paper-body > * { content-visibility: auto; contain-intrinsic-size: auto 3em; overflow-clip-margin: 4px; }
+
 /* print: every bar black with its number, the ones never scrolled near the
    screen too (re-check of 08-10-2026: they printed without one); browsers
    leave backgrounds out of a print unless told */
+
 @media print {
+  .settings-button { display: none; }
+  .glide-off .paper-body > * { content-visibility: visible; }
   /* the title above the abstract, not where it was stuck on screen */
   .paper-title { position: static; }
   span.r, .paper-body .fig-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
@@ -452,6 +532,7 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
   line-height: 1.45;
 }
 .result-head { font-weight: 700; margin-bottom: 0.3rem; }
+.result-time { margin-bottom: 0.3rem; }
 .result .cite { margin-bottom: 0.2rem; }
 .result .rights { color: var(--dim); font-size: 0.85rem; margin-bottom: 0.5rem; }
 .result-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
