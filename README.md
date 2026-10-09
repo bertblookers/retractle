@@ -10,8 +10,10 @@ blacked out, except small words like *the*, *of* and *and*. Guess a word and
 it is restored everywhere it appears, in all its forms (observe, observed,
 observing; galaxy, galaxies). Restore every word of the title to win. Your
 score is the number of guesses and the share of them that restored
-something. Each black bar shows how many characters it hides, and the
-guess box counts what you type the same way.
+something, beside how much of the paper you have restored. Each black bar
+shows how many characters it hides, and the guess box counts what you type
+the same way. The arrows beside the puzzle number take you to earlier days'
+papers, each with its own game.
 
 None of these papers was really retracted: they are well-known, well-loved
 papers, and the "retraction" is only the game's story.
@@ -27,7 +29,9 @@ Retractle is one of the daily sky puzzles of
 
 Retractle keeps no paper text. When you play, your browser loads the paper
 straight from arXiv's own HTML version of it (`arxiv.org/html/<id>`), and
-the game blacks out the words on your screen. This repository holds only
+the game blacks out the words on your screen. Its figures are blacked out
+too; each one loads from the same place once you have restored enough of
+its caption. This repository holds only
 each paper's arXiv identifier, version, title, authors and year (arXiv
 metadata, released under CC0). After a game, Retractle names the paper in
 full, links to its arXiv page and shows the license arXiv states for it.
@@ -36,8 +40,9 @@ Copyright of every paper stays with its authors.
 ## Privacy
 
 No accounts and no tracking. Everything Retractle remembers, such as your
-games, is kept only in your own browser (`localStorage`). Retractle's one
-outside request is the day's paper, loaded from arxiv.org.
+games, is kept only in your own browser (`localStorage`). Retractle's only
+outside requests go to arxiv.org: the day's paper, and its figures as you
+restore them.
 
 ## Run locally
 

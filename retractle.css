@@ -36,8 +36,44 @@
   color: var(--dim);
   font-size: 0.95rem;
   display: flex;
-  gap: 0.9rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.9rem;
   justify-content: center;
+}
+
+/* the puzzle navigator, as Muldle's: a joined group « Puzzle #N », its
+   frame and dividers in the page's border colour, no fill; the number reads
+   as active, never greyed (it leads back to today's); a step that would
+   leave the days that have come is greyed */
+.puzzle-nav {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.puzzle-nav[hidden] { display: none; }
+.nav-btn {
+  background: transparent;
+  color: var(--dim);
+  border: none;
+  padding: 0.25rem 0.8rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-btn + .nav-btn { border-left: 1px solid var(--border); }
+.nav-step { font-size: 1rem; line-height: 1.23; }
+.nav-num { color: var(--text); letter-spacing: 0.04em; }
+.nav-btn:disabled { color: var(--border); cursor: default; }
+/* the focus ring inside the button: the group's frame (overflow: hidden, for
+   its rounded corners) cut an outer one off (review of 09-10-2026) */
+.nav-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (hover: hover) {
+  .nav-btn:not(:disabled):hover { color: var(--text); }
 }
 
 .wip-note {
@@ -166,6 +202,66 @@
   padding-left: 0.7rem;
 }
 
+/* a figure: its graphics (each a black block of its own shape until enough
+   of the caption is restored, then its image from arXiv, in the same box),
+   a credit line, its caption. Panels sit side by side as they fit. */
+.paper-body .fig { margin: 1.1rem 0 0.9rem; }
+.paper-body .fig-graphic {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.paper-body .fig-bar {
+  box-sizing: border-box;
+  max-width: 100%;
+  background: var(--bar);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* a figure that came back: its box keeps its place and size while the
+   image loads ("restoring…"), and if it can't be loaded */
+.paper-body .fig-bar.loading, .paper-body .fig-bar.failed {
+  background: transparent;
+  border: 1px dashed #b5ae9c;
+}
+.paper-body .fig-bar.loading span { color: #6b665a; }
+.paper-body .fig-bar span {
+  color: #ffffff8c;
+  font: 600 0.72rem "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.paper-body .fig-graphic img { max-width: 100%; height: auto; object-fit: contain; background: #fff; }
+.paper-body .fig-credit {
+  margin: -0.3rem 0 0.6rem;
+  text-align: center;
+  color: #6b665a;
+  font: 0.75rem "Segoe UI", system-ui, sans-serif;
+}
+.paper-body .fig-credit a { color: inherit; }
+/* a figure with no graphic in arXiv's HTML */
+.paper-body .fig-graphic.beyond {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  border: 2px dashed #ccc6b5;
+  border-radius: 4px;
+  padding: 0.8rem 1rem;
+}
+.paper-body .fig-graphic.beyond .fig-credit { margin: 0; }
+.paper-body .fig-beyond {
+  margin: 0;
+  color: #6b665a; /* 5.1:1 on the sheet (review of 08-10-2026: 3.3:1 was too pale) */
+  font: 800 0.9rem "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 /* maths as in the paper: inline in the line, displayed equations on lines
    of their own (MathML, drawn by the browser); a formula too wide for the
    screen scrolls in its own box instead of the page */
@@ -216,7 +312,9 @@ span.r.count::after {
    screen too (re-check of 08-10-2026: they printed without one); browsers
    leave backgrounds out of a print unless told */
 @media print {
-  span.r { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  /* the title above the abstract, not where it was stuck on screen */
+  .paper-title { position: static; }
+  span.r, .paper-body .fig-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   span.r::after {
     content: attr(data-len);
     position: absolute;
@@ -227,6 +325,10 @@ span.r.count::after {
     color: #fff;
     font: normal 600 max(0.62em, 0.6rem)/1 "Segoe UI", system-ui, sans-serif;
   }
+  /* a figure that came back but never came near the view prints as its
+     empty box, not with a progress word frozen on paper (review of
+     09-10-2026; the print asks for it, so the next one has it) */
+  .paper-body .fig-bar.loading span { visibility: hidden; }
 }
 
 /* an older retractle.js's maths bar (block characters), in a deploy's
@@ -250,6 +352,14 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
   span.r.count::after, span.r::after { forced-color-adjust: none; color: Canvas; }
   .k.hl { forced-color-adjust: none; background: Mark; color: MarkText; }
   .k.cur { outline-color: CanvasText; }
+  .paper-body .fig-bar { forced-color-adjust: none; background: CanvasText; }
+  .paper-body .fig-bar span { forced-color-adjust: none; color: Canvas; }
+  .paper-body .fig-bar.loading, .paper-body .fig-bar.failed { background: Canvas; border-color: CanvasText; }
+  .paper-body .fig-bar.loading span { color: CanvasText; }
+  /* a figure keeps its white plate, as in the paper: forced to the page's
+     colour, a dark theme's black, a transparent figure drawn in black
+     vanished (review of 09-10-2026) */
+  .paper-body .fig-graphic img { forced-color-adjust: none; background: #fff; }
 }
 
 /* the side panel: guess box, score, guess list */

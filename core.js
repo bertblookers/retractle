@@ -203,6 +203,17 @@ const RetractleCore = (() => {
     return Math.round(100 * hits.filter(h => h > 0).length / hits.length);
   }
 
+  // How much of the paper the player has restored (user, 09-10-2026: "total
+  // % restored"): the share of its redacted places (every black bar: the
+  // title, the text, captions and formulas) that guesses brought back. It
+  // says nothing the bars don't show. Whole percent, rounded down, so 100%
+  // means every bar; "<1%" for a start that rounds down to nothing.
+  function restoredShare(restored, total) {
+    if (!total || restored <= 0) return "0%";
+    const pct = Math.floor(100 * Math.min(restored, total) / total);
+    return pct === 0 ? "<1%" : `${pct}%`;
+  }
+
   /* ============ the daily paper ============ */
 
   // Puzzle #0 is 2026-10-08, launch day (moved from 2026-10-07, the day the
@@ -254,6 +265,15 @@ const RetractleCore = (() => {
   // the puzzle number of a calendar date { y, m, d }
   function dayOfDate(date) {
     return dayNumber(new Date(date.y, date.m - 1, date.d, 12));
+  }
+
+  // The puzzle a "?p=N" address names (as Muldle's): a whole number,
+  // clamped to the days that have come (0 to `today`), so no day ahead can
+  // be reached; null when there is none.
+  function puzzleFromQuery(search, today) {
+    const p = new URLSearchParams(search).get("p");
+    if (p === null || !/^\s*[+-]?\d+\s*$/.test(p)) return null;
+    return Math.max(0, Math.min(today, parseInt(p, 10)));
   }
 
   const mod = (a, n) => ((a % n) + n) % n;
@@ -355,6 +375,27 @@ const RetractleCore = (() => {
 
   function htmlUrl(p) {
     return `https://arxiv.org/html/${p.id}v${p.v}`;
+  }
+
+  // A figure's image address: its `src` resolved against the paper's arXiv
+  // HTML address (no trailing slash: "1403.0007v3/x1.png" becomes
+  // https://arxiv.org/html/1403.0007v3/x1.png), and only ever one of
+  // arXiv's HTML files: anything else is null (not loaded).
+  function figureUrl(p, src) {
+    let url;
+    try { url = new URL(src, htmlUrl(p)); } catch { return null; }
+    return url.origin === "https://arxiv.org" && url.pathname.startsWith("/html/") ? url.href : null;
+  }
+
+  // A retracted figure comes back once this share of the word places hidden
+  // in its caption is restored (user, 08-10-2026: "80%? less? more?";
+  // calibrated on 12 real papers with tools/sim_figures.mjs: the first
+  // figure back around a third of a typical win, working in
+  // notes/maths-and-figures.md). A figure whose caption hides nothing comes
+  // back when the game ends.
+  const FIGURE_SHARE = 0.4;
+  function figureRevealed(restored, hidden) {
+    return hidden > 0 && restored >= FIGURE_SHARE * hidden;
   }
 
   function absUrl(p) {
@@ -472,9 +513,14 @@ const RetractleCore = (() => {
 
   // Blocks: { kind: "heading", level, parts } | { kind: "para", parts } |
   // { kind: "caption", parts } | { kind: "label", text } (a visible label
-  // such as "Abstract") | { kind: "equation", rows } (equationRows). Parts
-  // are tokenize()'s, plus { tag } (visible numbering: "2.1", "Figure 3:",
-  // "(1)") and { math } (mathTree).
+  // such as "Abstract") | { kind: "equation", rows } (equationRows) |
+  // { kind: "figure", id, images, blocks, unshown } (figureImages; the
+  // figure's own caption blocks follow it: `blocks` of them, so a page that
+  // doesn't know figure blocks still draws the captions; `unshown`: no
+  // image, but a drawing or table the game doesn't show, a TikZ picture as
+  // inline SVG for one, so the figure is in arXiv's HTML after all). Parts are tokenize()'s, plus
+  // { tag } (visible numbering: "2.1", "Figure 3:", "(1)") and { math }
+  // (mathTree).
   // Left out: everything before the abstract (journal front matter, the
   // document's own title: the game draws the clean arXiv one, authors),
   // dates, footnotes, tables, references, acknowledgements, and LaTeX macros
@@ -520,6 +566,23 @@ const RetractleCore = (() => {
     return text;
   }
 
+  // A figure's graphics, in order: PNG/JPG <img> and SVG <object>, each
+  // { src, w, h }: its address as written (relative; the page resolves it,
+  // figureUrl) and its size (the retracted block takes its shape without
+  // loading it). LaTeXML's placeholder for a missing image is no graphic.
+  function figureImages(fig) {
+    const out = [];
+    for (const el of fig.querySelectorAll("img, object")) {
+      if (el.classList.contains("ltx_missing_image")) continue;
+      const src = el.localName === "img" ? el.getAttribute("src")
+        : /svg/i.test(el.getAttribute("type") || "") ? el.getAttribute("data") : null;
+      if (!src) continue;
+      const w = parseFloat(el.getAttribute("width")), h = parseFloat(el.getAttribute("height"));
+      out.push(w > 0 && h > 0 ? { src, w, h } : { src, w: 476, h: 357 });
+    }
+    return out;
+  }
+
   // `start`: the abstract; whatever lies before it is front matter
   function walk(el, out, start) {
     for (const child of el.children) {
@@ -551,6 +614,17 @@ const RetractleCore = (() => {
         if (parts.some(p => p.w)) out.push({ kind: "para", parts });
       } else if (child.matches(".ltx_equation, .ltx_equationgroup")) {
         out.push({ kind: "equation", rows: equationRows(child) });
+      } else if (name === "figure" && child.classList.contains("ltx_figure") &&
+          !child.parentElement.closest("figure.ltx_figure")) {
+        // a figure (its panels, nested figures among them, inside it): its
+        // graphics, then its captions; one with neither is left out
+        const fig = { kind: "figure", id: child.id || "", images: figureImages(child), blocks: 0 };
+        if (!fig.images.length && child.querySelector("svg, table, .ltx_tabular")) fig.unshown = true;
+        out.push(fig);
+        const from = out.length;
+        walk(child, out, start);
+        fig.blocks = out.length - from;
+        if (!fig.images.length && !fig.blocks) out.pop();
       } else {
         walk(child, out, start);
       }
@@ -583,9 +657,10 @@ const RetractleCore = (() => {
 
   return {
     COMMON, norm, isCommon, useLemmas, related, tokenize, cleanGuess, guessParts,
-    typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, EPOCH, SEED, ERAS,
-    shuffledOrder, dayNumber, dayOfDate, eraIndex, eraPool, paperForDay,
-    poolForDay, newsParts, htmlUrl, absUrl, extractBlocks, paperLicense, isPaper,
+    typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, restoredShare, EPOCH, SEED, ERAS,
+    shuffledOrder, dayNumber, dayOfDate, puzzleFromQuery, eraIndex, eraPool, paperForDay,
+    poolForDay, newsParts, htmlUrl, absUrl, figureUrl, FIGURE_SHARE, figureRevealed,
+    extractBlocks, paperLicense, isPaper,
   };
 })();
 

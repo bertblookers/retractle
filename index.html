@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retractle — Restore the retracted paper</title>
 <meta name="description" content="Restore a famous astronomy paper word by word. A work in progress.">
-<link rel="stylesheet" href="shared.css?v=45222fbdb5">
-<link rel="stylesheet" href="retractle.css?v=45222fbdb5">
+<link rel="stylesheet" href="shared.css?v=35b8bbdf61">
+<link rel="stylesheet" href="retractle.css?v=35b8bbdf61">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -15,7 +15,14 @@
 <header class="top">
   <a class="hub-mark" href="../" title="All the daily sky puzzles">Urania’s Mirror</a>
   <h1>RETRACTLE</h1>
+  <!-- the puzzle navigator, as Muldle's: « Puzzle #N », the days that have
+       come only (retractle.js shows it; an older one fills the label) -->
   <p class="puzzle-line"><span id="puzzle-label"></span>
+    <span class="puzzle-nav" id="puzzle-nav" role="group" aria-label="Puzzles" hidden>
+      <button type="button" id="nav-prev" class="nav-btn nav-step" aria-label="Previous puzzle">&laquo;</button>
+      <button type="button" id="nav-today" class="nav-btn nav-num" title="Back to today's puzzle">Puzzle #<span id="nav-num"></span></button>
+      <button type="button" id="nav-next" class="nav-btn nav-step" aria-label="Next puzzle">&raquo;</button>
+    </span>
     <button id="practice-button" class="link-button" type="button"></button></p>
   <p class="wip-note"><strong>Work in progress.</strong> Future papers and
     the rules may still change; the papers of days already played won't.</p>
@@ -36,8 +43,14 @@
     <li>Formulas are shown as in the paper. Their words and their longer
       numbers are redacted too; symbols, short numbers and one-letter
       variables are not.</li>
-    <li>Click a guess in the list to jump through its places.</li>
-    <li>A new paper every day at midnight. The papers are famous, well-loved
+    <li>Figures are retracted too: each comes back once you've restored
+      40% of the words hidden in its caption (one without a caption, when
+      the game is over).</li>
+    <li>Click a guess in the list to jump through its places. The score
+      shows how much of the paper you've restored: the share of its black
+      bars your guesses brought back.</li>
+    <li>A new paper every day at midnight; &laquo; and &raquo; beside the
+      puzzle number take you to earlier days' papers. The papers are famous, well-loved
       astronomy papers from <a href="https://arxiv.org" target="_blank"
       rel="noopener">arXiv</a>; none of them was really retracted.</li>
   </ul>
@@ -101,10 +114,10 @@
   <a href="https://github.com/bertblookers/retractle" target="_blank" rel="noopener">Source</a> (AGPL-3.0)
 </footer>
 
-<script src="papers.js?v=45222fbdb5"></script>
-<script src="lemmas.js?v=45222fbdb5"></script>
-<script src="core.js?v=45222fbdb5"></script>
-<script src="news.js?v=45222fbdb5"></script>
-<script src="retractle.js?v=45222fbdb5"></script>
+<script src="papers.js?v=35b8bbdf61"></script>
+<script src="lemmas.js?v=35b8bbdf61"></script>
+<script src="core.js?v=35b8bbdf61"></script>
+<script src="news.js?v=35b8bbdf61"></script>
+<script src="retractle.js?v=35b8bbdf61"></script>
 </body>
 </html>

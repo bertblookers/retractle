@@ -5,13 +5,20 @@
 (() => {
   "use strict";
   const C = RetractleCore;
-  const DAILY_KEY = "retractle-v1";           // { day, id, v, guesses, done }
+  const DAILY_KEY = "retractle-v1";           // { day, id, v, guesses, done }: today's daily
+  const ARCHIVE_KEY = "retractle-archive-v1"; // { "<day>": { day, id, v, guesses, done } }: earlier days'
   const PRACTICE_KEY = "retractle-practice-v1"; // { id, v, guesses, done }
+  const NAV_KEY = "retractle-nav-focus";      // sessionStorage: the navigator's button pressed before a load
   const FETCH_TIMEOUT = 30000;
 
   const $ = id => document.getElementById(id);
   const practice = new URLSearchParams(location.search).has("practice");
-  const day = C.dayNumber();
+  const today = C.dayNumber();
+  // the puzzle in play: today's, or an earlier day's from the navigator
+  // ("?p=N", as in Muldle; never a day still to come). An older core.js (a
+  // deploy's mixed cache) has no navigator: today's.
+  const asked = C.puzzleFromQuery ? C.puzzleFromQuery(location.search, today) : null;
+  const day = practice || asked === null ? today : asked;
 
   let paper = null;     // an entry of RETRACTLE_PAPERS
   let tokens = [];      // every redactable word: { w, n, el }
@@ -21,6 +28,7 @@
   let done = null;      // null | "won" | "gaveup"
   let selected = null;  // { i, pos }: the guess whose places are lit
   let license = null;   // { text, href }: the paper's license, from arXiv's page
+  let restored = 0;     // places the guesses restored (not those shown at the end)
 
   /* ============ saves ============ */
 
@@ -28,10 +36,46 @@
     try { return JSON.parse(localStorage.getItem(key)) || null; } catch { return null; }
   }
 
+  // Each day keeps its own game: today's daily in DAILY_KEY, an earlier
+  // day's (played from the navigator) in the archive, by day; an earlier
+  // day's game is kept there only once it has a guess or an end.
   function save() {
     const entry = { id: paper.id, v: paper.v, guesses, done };
     if (!practice) entry.day = day;
-    try { localStorage.setItem(practice ? PRACTICE_KEY : DAILY_KEY, JSON.stringify(entry)); } catch { /* private window: play on unsaved */ }
+    try {
+      if (practice) localStorage.setItem(PRACTICE_KEY, JSON.stringify(entry));
+      else if (day === today) localStorage.setItem(DAILY_KEY, JSON.stringify(entry));
+      else if (guesses.length || done) {
+        const a = loadArchive();
+        a[day] = entry;
+        localStorage.setItem(ARCHIVE_KEY, JSON.stringify(a));
+      }
+    } catch { /* private window: play on unsaved */ }
+  }
+
+  // earlier days' games, by day
+  function loadArchive() {
+    const a = load(ARCHIVE_KEY);
+    return a && typeof a === "object" && !Array.isArray(a) ? a : {};
+  }
+
+  // `s` if it is a save this code wrote for day `d`'s paper, else null
+  function saveOfDay(s, d) {
+    const p = C.paperForDay(RETRACTLE_PAPERS, d);
+    return validSave(s) && s.day === d && s.id === p.id && s.v === p.v ? s : null;
+  }
+
+  // The daily save is taken over by the next day's daily, so an earlier
+  // day's game in it moves to the archive first (unless the archive holds
+  // a game of that day already: played from the navigator, so newer).
+  function keepPastDaily() {
+    const s = load(DAILY_KEY);
+    if (!validSave(s) || !Number.isInteger(s.day) || s.day < 0 || s.day >= today) return;
+    if (!s.guesses.length && !s.done) return;
+    const a = loadArchive();
+    if (saveOfDay(a[s.day], s.day) || !saveOfDay(s, s.day)) return;
+    a[s.day] = s;
+    try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(a)); } catch { /* unsaved */ }
   }
 
   function findPaper(id, v) {
@@ -41,9 +85,9 @@
   // a practice paper from today's era's pool: never today's daily, nor
   // `not` (the one just played)
   function randomPaper(not) {
-    const today = C.paperForDay(RETRACTLE_PAPERS, day);
-    const others = C.poolForDay(RETRACTLE_PAPERS, day).filter(p => p !== today && p !== not);
-    return others[Math.floor(Math.random() * others.length)] || today;
+    const daily = C.paperForDay(RETRACTLE_PAPERS, today);
+    const others = C.poolForDay(RETRACTLE_PAPERS, today).filter(p => p !== daily && p !== not);
+    return others[Math.floor(Math.random() * others.length)] || daily;
   }
 
   // A save is used only if it has the shape this code writes; anything else
@@ -63,8 +107,76 @@
       return { p: randomPaper(), s: null };
     }
     const p = C.paperForDay(RETRACTLE_PAPERS, day);
-    const s = load(DAILY_KEY);
-    return { p, s: validSave(s) && s.day === day && s.id === p.id && s.v === p.v ? s : null };
+    const kept = day < today && saveOfDay(loadArchive()[day], day);
+    return { p, s: kept || saveOfDay(load(DAILY_KEY), day) };
+  }
+
+  /* ============ the puzzle navigator ============ */
+
+  // As Muldle's (user, 09-10-2026: "see muldle"): « and » step through the
+  // days that have come, never one still to come; the number leads back to
+  // today's. A step loads the page for that day ("?p=N"; today's has none),
+  // which sets that day's game up as on its own day. A button pressed from
+  // the keyboard keeps the focus across the load, so the keyboard can step
+  // on; a mouse or touch press leaves it to the guess box, as on any load
+  // (review of 09-10-2026: kept on the button, typed letters went nowhere
+  // and Enter stepped again). Returns whether it took the focus.
+  function setUpNav() {
+    const label = $("puzzle-label"), nav = $("puzzle-nav");
+    if (practice || !nav) {
+      // an older index.html (a deploy's mixed cache) has no navigator
+      label.textContent = practice ? "Practice paper" : `Puzzle #${day}`;
+      return false;
+    }
+    // the address names the puzzle in play: today's none, an earlier one
+    // its number (a day still to come was clamped to today)
+    try {
+      const url = new URL(location.href);
+      if (url.searchParams.has("p")) {
+        if (day === today) url.searchParams.delete("p");
+        else url.searchParams.set("p", day);
+        history.replaceState(history.state, "", url);
+      }
+    } catch { /* no history API: the address stays */ }
+    label.textContent = "Archive";
+    label.hidden = day === today;
+    $("nav-num").textContent = day;
+    // a screen reader hears the puzzle in play on a step's new page: in the
+    // title, and as the steps' description (review of 09-10-2026)
+    if (day < today) document.title = document.title.replace(/^Retractle\b/, `Retractle #${day} (archive)`);
+    for (const id of ["nav-prev", "nav-next"]) $(id).setAttribute("aria-describedby", day < today ? "puzzle-label nav-today" : "nav-today");
+    $("nav-prev").disabled = day <= 0;
+    $("nav-next").disabled = day >= today;
+    nav.hidden = false;
+    const go = (to, which) => {
+      to = Math.max(0, Math.min(today, to));
+      if (to === day) return;
+      try {
+        if (which) sessionStorage.setItem(NAV_KEY, which);
+        else sessionStorage.removeItem(NAV_KEY);
+      } catch { /* the focus isn't kept */ }
+      const url = new URL(location.href);
+      url.searchParams.delete("practice");
+      if (to === today) url.searchParams.delete("p");
+      else url.searchParams.set("p", to);
+      location.replace(url);
+    };
+    // a click from the keyboard (Enter, Space) has detail 0, a mouse's or a
+    // touch's its count of presses; some screen readers' presses count one
+    // too (NVDA or JAWS in Firefox, TalkBack on Android, VoiceOver on iOS),
+    // so theirs land in the guess box (a known limit: CLAUDE.md, "The puzzle
+    // navigator")
+    for (const [id, to] of [["nav-prev", day - 1], ["nav-next", day + 1], ["nav-today", today]]) {
+      $(id).addEventListener("click", e => go(to, e.detail === 0 ? id : null));
+    }
+    let which = null;
+    try {
+      which = sessionStorage.getItem(NAV_KEY);
+      sessionStorage.removeItem(NAV_KEY);
+    } catch { /* no focus to keep */ }
+    if (!["nav-prev", "nav-next", "nav-today"].includes(which)) return false;
+    ($(which).disabled ? $("nav-today") : $(which)).focus();
+    return true;
   }
 
   /* ============ drawing the paper ============ */
@@ -170,37 +282,280 @@
     return table;
   }
 
+  function blockEl(b) {
+    let el;
+    if (b.kind === "heading") {
+      el = document.createElement(`h${Math.min(b.level + 1, 5)}`);
+      addParts(b.parts, el);
+    } else if (b.kind === "label") {
+      el = document.createElement("p");
+      el.className = "label";
+      el.textContent = b.text;
+    } else if (b.kind === "para" || b.kind === "caption") {
+      el = document.createElement("p");
+      if (b.kind === "caption") el.className = "caption";
+      // a formula too wide for a phone scrolls inside its paragraph
+      if (b.parts.some(p => p.math)) el.classList.add("has-math");
+      addParts(b.parts, el);
+    } else if (b.kind === "equation") {
+      el = document.createElement("div");
+      el.className = "equation";
+      // without rows: an older core.js's block (see addParts)
+      el.append(b.rows ? drawEquation(b.rows) : "∑ equation " + (b.tag || ""));
+    }
+    return el;
+  }
+
   function render(blocks) {
     const title = $("paper-title");
     title.replaceChildren();
     addParts(C.tokenize(paper.title), title);
     const body = $("paper-body");
     body.replaceChildren();
-    for (const b of blocks) {
-      let el;
-      if (b.kind === "heading") {
-        el = document.createElement(`h${Math.min(b.level + 1, 5)}`);
-        addParts(b.parts, el);
-      } else if (b.kind === "label") {
-        el = document.createElement("p");
-        el.className = "label";
-        el.textContent = b.text;
-      } else if (b.kind === "para" || b.kind === "caption") {
-        el = document.createElement("p");
-        if (b.kind === "caption") el.className = "caption";
-        // a formula too wide for a phone scrolls inside its paragraph
-        if (b.parts.some(p => p.math)) el.classList.add("has-math");
-        addParts(b.parts, el);
-      } else if (b.kind === "equation") {
-        el = document.createElement("div");
-        el.className = "equation";
-        // without rows: an older core.js's block (see addParts)
-        el.append(b.rows ? drawEquation(b.rows) : "∑ equation " + (b.tag || ""));
+    figures = [];
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      if (b.kind === "figure") {
+        // the figure, then its own caption blocks inside it
+        const inner = blocks.slice(i + 1, i + 1 + b.blocks);
+        i += b.blocks;
+        body.append(drawFigure(b, inner));
+        continue;
       }
+      const el = blockEl(b);
       if (el) body.append(el);
     }
     for (const el of title.querySelectorAll("span.r")) el.classList.add("count");
     numberNear(body.children);
+  }
+
+  /* ============ figures ============ */
+
+  // Figures are retracted too (user, 08-10-2026): each graphic is a black
+  // block of its own shape until enough of the figure's caption is restored
+  // (core.js's figureRevealed), then its image loads straight from
+  // arxiv.org, like the text, nothing copied or proxied (user: "We just work
+  // with the things that are available"), shown unchanged. Until then the
+  // page holds no image address (file names and the text in an image can
+  // spoil title words). A figure with no graphic is "Beyond repair" (user,
+  // 08-10-2026). The links to the figure and to the PDF come when the game
+  // is over: they name the paper.
+  //
+  // Loading (review of 08-10-2026): a figure that came back loads once it
+  // comes within a screen's height of the view (a finished game of 48
+  // figures doesn't fetch them all at once), with the paper's timeout. Its
+  // box keeps its place and size, saying "restoring…", until the image is
+  // decoded, then the image takes its place; if it can't be loaded, the box
+  // stays and its credit line says so. A raster image is shown from a blob:
+  // (the page's own copy in memory, so "open image" doesn't name the paper)
+  // and the blob: is let go once shown; an SVG never becomes a blob:, which
+  // would put a third-party document in this site's origin (every game's
+  // saves) when opened on its own: it is shown from a data: address, whose
+  // document has an origin of its own.
+  let figures = []; // { block, el, graphic, credit, boxes, from, to (its tokens), name, images, shown, asked (its images), failed }
+  const figureOf = new WeakMap(); // a figure's element -> its entry
+  let figuresNear = null;         // the IntersectionObserver that starts the loads
+
+  // "Figure 3" from a caption's tag ("Figure 3:", "Fig. 3.")
+  const FIGURE_NAME = /^(?:fig(?:ure|\.)?|plate|panel)\s*[^\s:.]+/i;
+  const RASTER = /^image\/(png|jpeg|gif|webp)$/;
+
+  function drawFigure(b, inner) {
+    const el = document.createElement("figure");
+    el.className = "fig";
+    const graphic = document.createElement("div");
+    graphic.className = "fig-graphic";
+    el.append(graphic);
+    const from = tokens.length;
+    let name = "";
+    // the caption blocks, as the figure's caption (its accessible name)
+    const caption = document.createElement("figcaption");
+    for (const ib of inner) {
+      const tag = (ib.parts || []).find(q => q.tag !== undefined);
+      if (!name && tag) name = (FIGURE_NAME.exec(tag.tag.trim()) || [""])[0];
+      const child = blockEl(ib);
+      if (child) caption.append(child);
+    }
+    if (caption.children.length) el.append(caption);
+    const images = b.images.map(img => ({ ...img, url: C.figureUrl ? C.figureUrl(paper, img.src) : null }))
+      .filter(img => img.url);
+    const credit = document.createElement("p");
+    credit.className = "fig-credit";
+    const f = { block: b, el, graphic, credit, boxes: [], from, to: tokens.length, name: name || "A figure",
+      images, shown: false, failed: false };
+    if (images.length) {
+      f.boxes = images.map(img => retractedBlock(img, f.to > f.from));
+      graphic.append(...f.boxes);
+    } else {
+      // nothing to bring back: said at once
+      graphic.classList.add("beyond");
+      const label = document.createElement("p");
+      label.className = "fig-beyond";
+      label.textContent = "Beyond repair";
+      graphic.append(label, credit);
+      f.shown = true;
+      credit.replaceChildren(...creditParts(f));
+    }
+    figures.push(f);
+    figureOf.set(el, f);
+    return el;
+  }
+
+  // a graphic's retracted block: its shape, scaled to the column. A figure
+  // whose caption hides nothing comes back only when the game is over, and
+  // says so (review of 08-10-2026)
+  function retractedBlock(img, captioned) {
+    const el = document.createElement("div");
+    el.className = "fig-bar";
+    el.style.width = `${img.w}px`;
+    el.style.aspectRatio = `${img.w} / ${img.h}`;
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", captioned ? "retracted figure: restore more of its caption to see it"
+      : "retracted figure: it comes back when the game is over");
+    const label = document.createElement("span");
+    label.textContent = captioned ? "retracted" : "retracted until the end";
+    label.setAttribute("aria-hidden", "true");
+    el.append(label);
+    return el;
+  }
+
+  // what a figure's credit line says: the source, or why it can't be shown;
+  // its links once the game is over
+  function creditParts(f) {
+    const pdf = () => link(`https://arxiv.org/pdf/${paper.id}v${paper.v}`, "the PDF");
+    const html = text => link(`${C.htmlUrl(paper)}#${f.block.id}`, text);
+    if (!f.images.length) {
+      const why = f.block.unshown ? "This figure can't be shown here; see it in " : "This figure isn't in arXiv's HTML version; see it in ";
+      return done ? [why, pdf()] : [why + "the PDF"];
+    }
+    if (f.failed) {
+      return done ? ["This figure couldn't be loaded from arXiv right now; see it in ", html("the paper's arXiv HTML version")]
+        : ["This figure couldn't be loaded from arXiv right now"];
+    }
+    return [done ? html("From the paper's arXiv HTML version") : "From the paper's arXiv HTML version"];
+  }
+
+  // the figures whose caption is restored far enough (all of them once the
+  // game is over) come back; returns those that just did. Their images load
+  // when they come near the view.
+  function revealFigures(all) {
+    const back = [];
+    for (const f of figures) {
+      if (f.shown) continue;
+      let restored = 0;
+      for (let i = f.from; i < f.to; i++) if (!tokens[i].el.classList.contains("r")) restored++;
+      if (!all && !C.figureRevealed(restored, f.to - f.from)) continue;
+      f.shown = true;
+      f.boxes.forEach((box, k) => {
+        box.classList.add("loading");
+        box.setAttribute("aria-label", `${panelName(f, k)}: restoring from arXiv`);
+        box.firstChild.textContent = "restoring…";
+      });
+      f.credit.replaceChildren(...creditParts(f));
+      f.graphic.after(f.credit);
+      loadWhenNear(f);
+      back.push(f);
+    }
+    return back;
+  }
+
+  function panelName(f, k) {
+    return f.images.length > 1 ? `${f.name}, panel ${k + 1} of ${f.images.length}` : f.name;
+  }
+
+  function loadWhenNear(f) {
+    if (typeof IntersectionObserver === "undefined") { loadFigure(f); return; }
+    if (!figuresNear) {
+      figuresNear = new IntersectionObserver(entries => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          figuresNear.unobserve(e.target);
+          loadFigure(figureOf.get(e.target));
+        }
+      }, { rootMargin: "100% 0px" });
+    }
+    figuresNear.observe(f.el);
+  }
+
+  // A print asks for every figure that came back and hasn't been asked for:
+  // the print being laid out has them as their empty box (retractle.css
+  // prints no "restoring…"), the next one has them all (review of 09-10-2026).
+  addEventListener("beforeprint", () => {
+    for (const f of figures) {
+      if (!f.shown || f.asked) continue;
+      if (figuresNear) figuresNear.unobserve(f.el);
+      loadFigure(f);
+    }
+  });
+
+  // an image's address for the page: a blob: of a raster image, a data: of
+  // an SVG; arXiv refusing the page a copy (no CORS header) leaves its plain
+  // address, anything else is a failure (no second request)
+  async function imageSource(url) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
+    try {
+      let res;
+      try {
+        res = await fetch(url, { signal: ctrl.signal });
+      } catch (e) {
+        if (e.name === "AbortError") throw e;
+        return url;
+      }
+      if (!res.ok) throw new Error(`arXiv answered ${res.status}`);
+      const blob = await res.blob();
+      if (RASTER.test(blob.type)) return URL.createObjectURL(blob);
+      if (blob.type === "image/svg+xml") {
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      }
+      throw new Error(`not an image (${blob.type || "no type"})`);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // each graphic in its box's place once decoded; a failure keeps the box
+  async function loadFigure(f) {
+    if (f.asked) return;
+    f.asked = true;
+    await Promise.all(f.images.map(async (img, k) => {
+      const box = f.boxes[k];
+      let src = null;
+      try {
+        src = await imageSource(img.url);
+        const el = document.createElement("img");
+        el.width = img.w;
+        el.height = img.h;
+        el.style.aspectRatio = `${img.w} / ${img.h}`;
+        el.alt = panelName(f, k);
+        el.src = src;
+        await el.decode();
+        box.replaceWith(el);
+      } catch {
+        f.failed = true;
+        box.classList.replace("loading", "failed");
+        box.setAttribute("aria-label", `${panelName(f, k)}: couldn't be loaded from arXiv`);
+        box.firstChild.textContent = "";
+      } finally {
+        // shown (or not): the page's copy in memory can go
+        if (src && src.startsWith("blob:")) URL.revokeObjectURL(src);
+      }
+    }));
+    if (!f.failed) return;
+    f.credit.replaceChildren(...creditParts(f));
+    // said in the status line too, while it still speaks of this figure
+    const message = $("message");
+    if (message.textContent.endsWith(`${f.name} restored`)) message.textContent += " (it couldn't be loaded from arXiv right now)";
+  }
+
+  // once the game is over: the links (to the figure in arXiv's HTML, to the PDF)
+  function linkFigures() {
+    for (const f of figures) if (f.shown) f.credit.replaceChildren(...creditParts(f));
   }
 
   // A bar shows its number once it has the class `count`: the title's at
@@ -289,6 +644,7 @@
       show(tokens[i], "k");
     }
     hits.push(places.length);
+    restored += fresh;
     return fresh;
   }
 
@@ -329,8 +685,11 @@
       list.prepend(tr); // newest on top
     });
     $("guess-count").textContent = guesses.length ? `(${guesses.length})` : "";
+    // how much of the paper is restored (user, 09-10-2026), beside the
+    // score; an older core.js (a deploy's mixed cache) leaves it out
+    const share = C.restoredShare ? ` · ${C.restoredShare(restored, tokens.length)} restored` : "";
     $("score").textContent = guesses.length
-      ? `${guesses.length} guess${guesses.length === 1 ? "" : "es"} · ${C.accuracy(hits)}% accuracy`
+      ? `${guesses.length} guess${guesses.length === 1 ? "" : "es"} · ${C.accuracy(hits)}% accuracy${share}`
       : "";
   }
 
@@ -435,6 +794,9 @@
         : "Nothing new to restore in that");
       return;
     }
+    // figures whose caption is now restored far enough come back
+    const back = C.figureRevealed ? revealFigures(false) : [];
+    if (back.length) said.push(back.length === 1 ? `${back[0].name} restored` : `${back.length} figures restored`);
     say(said.join(" · "));
     selected = null;
     drawGuesses();
@@ -446,6 +808,7 @@
   function finish(how) {
     done = how;
     revealRest();
+    revealFigures(true);
     showResult();
     save();
     // said in the status line (screen readers hear it), and the keyboard
@@ -488,7 +851,8 @@
 
   function shareText() {
     const name = practice ? "Retractle practice" : `Retractle #${day}`;
-    const url = location.origin + location.pathname;
+    // an earlier day's puzzle is shared with its number, so the link opens it
+    const url = location.origin + location.pathname + (!practice && day < today ? `?p=${day}` : "");
     return `${name}: paper restored in ${guesses.length} guesses (${C.accuracy(hits)}% accuracy)\n${url}`;
   }
 
@@ -542,6 +906,7 @@
     $("guess-submit").disabled = true;
     $("guess-form").hidden = true; // leaves the room to the paper
     $("give-up").hidden = true;
+    linkFigures();
   }
 
   // a fresh practice paper, never the one just played
@@ -570,7 +935,7 @@
     if (!box || !C.newsParts || typeof RETRACTLE_NEWS === "undefined") return;
     let seen = null;
     try { seen = localStorage.getItem(SEEN_KEY); } catch { /* private window */ }
-    const parts = C.newsParts(RETRACTLE_NEWS, day, seen, returning);
+    const parts = C.newsParts(RETRACTLE_NEWS, today, seen, returning);
     if (!parts.latest && !parts.horizon.length) return;
     const fmt = d => new Date(d.y, d.m - 1, d.d)
       .toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
@@ -664,7 +1029,7 @@
   async function start() {
     // a first visit opens How to play; a returning player, What's new on
     // an update they haven't seen
-    const returning = !!(load(DAILY_KEY) || load(PRACTICE_KEY));
+    const returning = !!(load(DAILY_KEY) || load(PRACTICE_KEY) || load(ARCHIVE_KEY));
     if (!returning) $("help").open = true;
     try {
       drawNews(returning);
@@ -672,11 +1037,12 @@
       // What's new is extra: the game plays without it
       console.error("What's new:", e);
     }
+    keepPastDaily();
     const { p, s } = choosePuzzle();
     paper = p;
     guesses = s ? s.guesses.slice() : [];
     done = s ? s.done : null;
-    $("puzzle-label").textContent = practice ? "Practice paper" : `Puzzle #${day}`;
+    const navFocused = setUpNav();
     const pb = $("practice-button");
     pb.textContent = practice ? "Back to today's paper" : "Practice";
     pb.addEventListener("click", () => {
@@ -697,8 +1063,10 @@
       render(blocks);
       if (!practice || !s) save(); // a new practice paper is kept on reload
       hits = [];
+      restored = 0;
       for (const g of guesses) restore(g);
       drawGuesses();
+      if (C.figureRevealed) revealFigures(!!done);
       if (done) {
         revealRest();
         showResult();
@@ -707,7 +1075,7 @@
         $("guess-submit").disabled = false;
         $("give-up").hidden = false;
         showLength(); // a browser may have kept the field's text over a reload
-        $("guess-input").focus();
+        if (!navFocused) $("guess-input").focus();
       }
       // the bars on screen show their numbers in the first paint
       numberInView();
@@ -721,7 +1089,8 @@
       fail(`Something went wrong setting up the paper (${e.message}).`);
       return;
     }
-    window.__retractle = { paper, tokens, guesses: () => guesses, blocks };
+    window.__retractle = { paper, tokens, guesses: () => guesses, blocks, day, today,
+      figures: () => figures.map(f => ({ id: f.block.id, name: f.name, shown: f.shown, images: f.images.length, hidden: f.to - f.from })) };
   }
 
   // the loading line turns into the error and a way to try again

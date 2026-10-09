@@ -8,7 +8,10 @@ below are used under their own terms and credited here.
 Retractle's papers are loaded at play time, in the player's browser, from
 [arXiv](https://arxiv.org)'s HTML rendering of each paper
 (`https://arxiv.org/html/<id>v<version>`); the game keeps no copy of any
-paper's text. Copyright of each paper stays with its authors, under the
+paper's text. A figure's image loads the same way, from the same HTML
+version, once the player has restored enough of its caption, and is shown
+unchanged; after the game each figure links to its place there. Copyright
+of each paper and its figures stays with its authors, under the
 license arXiv states for it, which the game shows after each puzzle together
 with the paper's citation and a link to its arXiv page. No paper in the game
 was ever retracted: the retraction is only the game's story.
