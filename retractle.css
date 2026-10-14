@@ -70,7 +70,7 @@
   font-weight: 600;
 }
 .settings-toggle input { margin-top: 0.25rem; accent-color: var(--accent); }
-.settings-toggle-text span {
+.settings-toggle-text > span {
   display: block;
   margin-top: 2px;
   color: var(--dim);
@@ -386,8 +386,13 @@ span.r.count::after {
    room to show (pre-push review of 09-10-2026, A2: a word starting a line
    lost its frame's left side; a browser that doesn't widen paint
    containment with overflow-clip-margin still clips it). A block with
-   maths scrolls and has room of its own (above). */
-.glide-off .paper-body > * { content-visibility: auto; contain-intrinsic-size: auto 3em; overflow-clip-margin: 4px; }
+   maths scrolls and has room of its own (above). Only where the browser
+   has scroll anchoring (the class anchoring, set from
+   CSS.supports("overflow-anchor", "auto")): it keeps the text in place as
+   blocks above the view get their real height. WebKit (Safari, every
+   iPhone and iPad) has none, and the text jumped as the player scrolled up
+   after a jump (review of 09-10-2026, B2). */
+.anchoring.glide-off .paper-body > * { content-visibility: auto; contain-intrinsic-size: auto 3em; overflow-clip-margin: 4px; }
 
 /* print: every bar black with its number, the ones never scrolled near the
    screen too (re-check of 08-10-2026: they printed without one); browsers
@@ -395,7 +400,7 @@ span.r.count::after {
 
 @media print {
   .settings-button { display: none; }
-  .glide-off .paper-body > * { content-visibility: visible; }
+  .anchoring.glide-off .paper-body > * { content-visibility: visible; }
   /* the title above the abstract, not where it was stuck on screen */
   .paper-title { position: static; }
   span.r, .paper-body .fig-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
@@ -428,7 +433,8 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
    page's, which took away the bars and the marker of a guess's places
    (review of 08-10-2026): the bars in the text colour (in maths too) with
    their numbers in the page's, the places of the picked guess in the
-   system's mark colours, the current one outlined in the text colour.
+   system's mark colours, the current one outlined in the text colour (the
+   selected guess's row: with the guess list's rules, below).
    After the rules above, which it overrides at the same specificity
    (re-check of 08-10-2026). */
 @media (forced-colors: active) {
@@ -539,7 +545,18 @@ math .r { color: var(--bar); background: var(--bar); border-radius: 2px; }
   cursor: pointer;
 }
 .guess-word:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.guesses tr.sel { background: #ffe46b30; }
+/* the selected guess's row: after the hover, at its specificity, so the
+   pointer resting on it (to pick it again) and a phone's tap, which keeps
+   :hover, leave its colour (pre-push review of 14-10-2026, C1) */
+.guesses tbody tr.sel { background: #ffe46b30; }
+/* in forced colours its background would be the page's: the row in the
+   system's mark colours, as the guess's places (review of 14-10-2026, C4) */
+@media (forced-colors: active) {
+  .guesses tbody tr.sel { forced-color-adjust: none; background: Mark; color: MarkText; }
+  .guesses tbody tr.sel td { color: MarkText; } /* a miss's dim text too */
+  /* its button's focus ring, no longer forced either (re-check of 14-10-2026, R1) */
+  .guesses tbody tr.sel .guess-word:focus-visible { outline-color: MarkText; }
+}
 
 .give-up { align-self: flex-start; font-size: 0.85rem; color: var(--dim); }
 

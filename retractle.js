@@ -27,7 +27,7 @@
   let guesses = [];     // normalised guesses, in order
   let hits = [];        // how many places each guess restored (parallel)
   let done = null;      // null | "won" | "gaveup"
-  let selected = null;  // { i, pos }: the guess whose places are lit
+  let selected = null;  // { i, pos, chosen }: the guess whose places are lit (pick)
   let license = null;   // { text, href }: the paper's license, from arXiv's page
   let restored = 0;     // places the guesses restored (not those shown at the end)
   let elapsed = 0;      // ms of play so far (C.timeOfSave), or null: a game never timed
@@ -69,14 +69,36 @@
 
   // Each day keeps its own game: today's daily in DAILY_KEY, an earlier
   // day's (played from the navigator) in the archive, by day; an earlier
-  // day's game is kept there only once it has a guess or an end. A daily
-  // is today's only while the clock still shows its day and DAILY_KEY
-  // holds no later day's game: a page left open past midnight, or a clock
-  // set back, keeps its game in the archive instead of writing over a
-  // newer one (pre-push review of 09-10-2026, A1).
+  // day's game is kept there only once it has a guess or an end.
+  //
+  // One rule says where a day's game lives, for loading it (choosePuzzle),
+  // saving it (saveKey), keeping its time (keepTime) and moving it
+  // (keepPastDaily) alike, so no guess is lost (re-check of 09-10-2026,
+  // R1): once the archive holds a game of that day, there, as the newer,
+  // unless the daily save's carries it on (an older page saved there
+  // after the archive had it); until then the daily save, if it holds
+  // that day's game. `savedGame` finds it (a daily's: practice has a
+  // save of its own).
+  function savedGame(d) {
+    const a = saveOfDay(loadArchive()[d], d), s = saveOfDay(load(DAILY_KEY), d);
+    if (s && (!a || carriesOn(s, a))) return { key: DAILY_KEY, s };
+    return a ? { key: ARCHIVE_KEY, s: a } : { key: null, s: null };
+  }
+  // whether save `s` carries game `a` on: its guesses, then more, or an
+  // end `a` hasn't reached
+  function carriesOn(s, a) {
+    return a.guesses.every((g, i) => s.guesses[i] === g) &&
+      (s.guesses.length > a.guesses.length || (!!s.done && !a.done));
+  }
+  // Where the next save goes: the archive once it holds this day's game
+  // (by the rule above); a daily is saved as today's only while the clock
+  // still shows its day and DAILY_KEY holds no later day's game, so a
+  // page left open past midnight, or a clock set back, keeps its game in
+  // the archive instead of writing over a newer one (pre-push review of
+  // 09-10-2026, A1).
   function saveKey() {
     if (practice) return PRACTICE_KEY;
-    if (day !== today || C.dayNumber() !== day) return ARCHIVE_KEY;
+    if (day !== today || C.dayNumber() !== day || savedGame(day).key === ARCHIVE_KEY) return ARCHIVE_KEY;
     const s = load(DAILY_KEY);
     return validSave(s) && Number.isInteger(s.day) && s.day > day && (s.guesses.length || s.done)
       ? ARCHIVE_KEY : DAILY_KEY;
@@ -111,18 +133,18 @@
       document.visibilityState === "visible" ? now : null;
   }
   // The time so far, kept when the page is hidden or left: written into
-  // this game's save only while the save still holds this very game, so a
-  // game another tab played on, or the new paper "Another paper" chose,
-  // is left alone.
+  // this game's save where it lives (savedGame: past midnight too, with no
+  // guess since; re-check of 09-10-2026, R2/S1), and only while that save
+  // still holds this very game, so a game another tab played on, or the
+  // new paper "Another paper" chose, is left alone.
   function keepTime() {
     clock();
     if (elapsed === null || done || !guesses.length) return;
-    const key = saveKey();
-    const all = key === ARCHIVE_KEY ? loadArchive() : null;
-    const s = all ? all[day] : load(key);
-    if (!validSave(s) || s.id !== paper.id || s.v !== paper.v || (!practice && s.day !== day) ||
+    const { key, s } = practice ? { key: PRACTICE_KEY, s: load(PRACTICE_KEY) } : savedGame(day);
+    if (!key || !validSave(s) || s.id !== paper.id || s.v !== paper.v ||
         s.done || s.guesses.join() !== guesses.join()) return;
     s.ms = Math.round(elapsed);
+    const all = key === ARCHIVE_KEY ? loadArchive() : null;
     if (all) all[day] = s;
     if (write(key, JSON.stringify(all || s)) === "full") storageFull(true);
   }
@@ -146,9 +168,10 @@
   }
 
   // The daily save is taken over by the next day's daily, so an earlier
-  // day's game in it moves to the archive first (unless the archive holds
-  // a game of that day already: played from the navigator, or saved there
-  // by a page left open past midnight, so newer). A later day's game in it
+  // day's game in it moves to the archive first, where it lives from then
+  // on (unless the archive holds a game of that day already that it
+  // doesn't carry on: played from the navigator, or saved there by a page
+  // left open past midnight, so newer; savedGame). A later day's game in it
   // (a clock set back) stays: saveKey saves today's beside it. If
   // there is no room for it, it stays where it is and today's game isn't
   // saved over it (held), and the page says so.
@@ -156,8 +179,8 @@
     const s = load(DAILY_KEY);
     if (!validSave(s) || !Number.isInteger(s.day) || s.day < 0 || s.day >= today) return;
     if (!s.guesses.length && !s.done) return;
+    if (savedGame(s.day).key !== DAILY_KEY) return;
     const a = loadArchive();
-    if (saveOfDay(a[s.day], s.day) || !saveOfDay(s, s.day)) return;
     a[s.day] = s;
     held = write(ARCHIVE_KEY, JSON.stringify(a)) === "full";
   }
@@ -190,10 +213,8 @@
       if (p) return { p, s };
       return { p: randomPaper(), s: null };
     }
-    // the archive's first: newer than one left in the daily save (played
-    // from the navigator, or saved there by saveKey)
-    const p = C.paperForDay(RETRACTLE_PAPERS, day);
-    return { p, s: saveOfDay(loadArchive()[day], day) || saveOfDay(load(DAILY_KEY), day) };
+    // where this day's game lives (savedGame), as saveKey saves it
+    return { p: C.paperForDay(RETRACTLE_PAPERS, day), s: savedGame(day).s };
   }
 
   /* ============ the puzzle navigator ============ */
@@ -752,7 +773,6 @@
       const tr = document.createElement("tr");
       tr.dataset.i = i;
       if (!hits[i]) tr.className = "miss";
-      if (selected && selected.i === i) tr.classList.add("sel");
       const num = document.createElement("td");
       num.textContent = i + 1;
       // the word is a button, so the jump works from the keyboard too
@@ -763,6 +783,7 @@
       b.textContent = g;
       b.addEventListener("click", e => { e.stopPropagation(); pick(i); });
       word.append(b);
+      markRow(tr, !!selected && selected.i === i, b);
       const found = document.createElement("td");
       found.textContent = hits[i];
       tr.append(num, word, found);
@@ -778,10 +799,22 @@
       : "";
   }
 
-  // light up a guess's places; `jump` scrolls to the next one each time
+  // a guess's row marked selected or not: its look (sel) and, for a screen
+  // reader, its word's button (pre-push review of 14-10-2026, C3: whether a
+  // press selects a guess or steps through it depends on it)
+  function markRow(tr, on, b = tr.querySelector(".guess-word")) {
+    tr.classList.toggle("sel", on);
+    if (!b) return;
+    if (on) b.setAttribute("aria-current", "true");
+    else b.removeAttribute("aria-current");
+  }
+
+  // light up a guess's places and select its row; `jump` goes on to its next
+  // place (the first after a fresh selection, wrapping round), marks it,
+  // brings it into view and counts it. Returns how many places it has.
   function select(i, jump) {
     for (const el of document.querySelectorAll(".hl, .cur")) el.classList.remove("hl", "cur");
-    if (!selected || selected.i !== i) selected = { i, pos: -1 };
+    if (!selected || selected.i !== i) selected = { i, pos: -1, chosen: false };
     const places = placesOf(guesses[i]);
     for (const p of places) tokens[p].el.classList.add("hl");
     if (jump && places.length) {
@@ -791,14 +824,16 @@
       jumpTo(el);
       say(`“${guesses[i]}”: ${selected.pos + 1} of ${places.length}`);
     }
-    for (const tr of $("guess-list").children) tr.classList.toggle("sel", +tr.dataset.i === i);
+    for (const tr of $("guess-list").children) markRow(tr, +tr.dataset.i === i);
+    return places.length;
   }
 
   // The jump to a guess's place: smooth, unless the player turned the glide
   // off in Settings (user, 09-10-2026) or asked for less motion (review of
   // 08-10-2026): then instant ("auto" is instant, as no stylesheet sets
   // scroll-behavior). With the glide off the paper's blocks draw only near
-  // the view (content-visibility, Claude's proposal of 09-10-2026: a long
+  // the view where the browser has scroll anchoring (setUpSettings;
+  // content-visibility, Claude's proposal of 09-10-2026: a long
   // paper's first screen about 2.5x faster, notes/render-speed.md); the
   // blocks it passes take a guessed height until drawn, so the jump is
   // made again in the next frames, as they get their real height.
@@ -818,8 +853,17 @@
   }
 
   // A guess picked in the list, or guessed again (user, 08-10-2026: so the
-  // player never hunts for it in the list): its places lit, the next one
-  // brought into view, and its row in view in the list, scrolled inside the
+  // player never hunts for it in the list). The first pick only selects it
+  // (user, 14-10-2026: "first highlight the word, on the second click, it
+  // starts going through all the appearances of that word one by one"): its
+  // places lit, its row selected, the count said ("5 places highlighted"),
+  // the page left where it is. A pick of the guess so chosen goes on to its
+  // next place, the first after a fresh pick, wrapping round, and brings it
+  // into view ("2 of 5"). A new guess lights its places too but isn't
+  // chosen: a click on it, or the word typed again, is still a first pick.
+  // Picking another guess, or typing another word (guess), starts over.
+  // Returns whether it went on (a second pick). Either way the row comes
+  // into view in the list, scrolled inside the
   // list's own box (scrolling the row into view would stop the page's jump).
   // A row out of sight goes near the top of the box, a row's room above
   // it if the box has that room (at the top of the page the box can reach
@@ -828,10 +872,14 @@
   // of 08-10-2026: the room above pushed the row out of such a box, then
   // its top edge cut the word).
   function pick(i) {
-    select(i, true);
+    const step = !!selected && selected.i === i && selected.chosen;
+    if (!step) selected = { i, pos: -1, chosen: true };
+    const n = select(i, step);
+    if (!n) say(`“${guesses[i]}” is not in the paper`);
+    else if (!step) say(`“${guesses[i]}”: ${n} place${n === 1 ? "" : "s"} highlighted`);
     const box = $("guesses-box");
     const row = $("guess-list").querySelector(`tr[data-i="${i}"]`);
-    if (!box.open || !row) return;
+    if (!box.open || !row) return step;
     const b = box.getBoundingClientRect(), r = row.getBoundingClientRect();
     // the box's part on screen (all of it, if none is)
     let top = Math.max(b.top, 0), bottom = Math.min(b.bottom, innerHeight);
@@ -841,6 +889,7 @@
     } else if (r.top < top || r.bottom > bottom) {
       box.scrollTop += r.top - b.top - Math.min(r.height, bottom - top - r.height);
     }
+    return step;
   }
 
   function say(text) {
@@ -853,10 +902,17 @@
   // that is a small word or already restored is passed over). Another form
   // of an earlier guess is refused only when it would restore nothing new:
   // after "find", "found" still counts if "founded" is in the paper.
+  // Returns true when the field should keep what was typed: a word guessed
+  // before, so Enter again goes on through its places.
   function guess(input) {
-    if (done) return;
+    if (done) return false;
     const parts = C.guessParts(input);
-    if (parts.error !== undefined) { say(parts.error); return; }
+    if (parts.error !== undefined) {
+      // another word typed starts a pick over (an empty field changes nothing)
+      if (parts.error && selected) selected.chosen = false;
+      say(parts.error);
+      return false;
+    }
     const said = [];
     let refused = null; // the first part refused (a single word's message)
     const again = [];   // the parts guessed before: { repeat, form }
@@ -888,16 +944,21 @@
       // it that restores nothing new, or each part of a joined guess) acts
       // as if that guess were picked in the list (user, 08-10-2026: never
       // hunt for it in the list; the other form and joined guesses:
-      // coordinator, same reason). The message comes after the jump's own
-      // "1 of 3", so it stays.
-      if (again.length) pick(guesses.indexOf(again[0].repeat));
+      // coordinator, same reason). The first time it only selects that
+      // guess, and the message ("You already guessed …") comes after the
+      // pick's own, so it stays; the same again (Enter once more: the field
+      // keeps it) goes on to its next place, counted ("2 of 5"; user,
+      // 14-10-2026: "It should only do this on second enter"). Any other
+      // word starts over.
+      if (again.length && pick(guesses.indexOf(again[0].repeat))) return true;
+      if (!again.length && selected) selected.chosen = false;
       say(parts.words.length === 1 ? refused.error
         // quoted as read, as a single word's message is (re-check of
         // 08-10-2026: the field's own quotes were doubled)
         : again.length && !other && again.every(r => !r.form)
           ? `You already guessed “${C.cleanGuess ? C.cleanGuess(input) : input.trim()}”`
         : "Nothing new to restore in that");
-      return;
+      return again.length > 0;
     }
     // figures whose caption is now restored far enough come back
     const back = C.figureRevealed ? revealFigures(false) : [];
@@ -908,6 +969,7 @@
     select(guesses.length - 1, false);
     if (C.isSolved(paper.title, guesses)) finish("won");
     save();
+    return false;
   }
 
   function finish(how) {
@@ -923,12 +985,15 @@
     // players see it once, in the result (re-check of 09-10-2026, R2). The
     // two versions sit side by side, each whole: a hidden part inside the
     // sentence lost its leading space in the accessibility tree ("archivein
-    // 12 minutes", pre-push review of 09-10-2026, B1)
+    // 12 minutes", pre-push review of 09-10-2026, B1). The hidden part's
+    // style is inline too, so an older stylesheet (a deploy's mixed cache)
+    // doesn't show both (re-check of 09-10-2026, S2)
     if (how === "won" && elapsed !== null && C.playTimeWords) {
       const shown = document.createElement("span"), heard = document.createElement("span");
       shown.setAttribute("aria-hidden", "true");
       shown.textContent = "Restored to the archive!";
       heard.className = "visually-hidden";
+      heard.style.cssText = "position:absolute;width:1px;height:1px;margin:0;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap";
       heard.textContent = `Restored to the archive in ${C.playTimeWords(elapsed)}!`;
       $("message").replaceChildren(shown, heard);
     } else say(how === "won" ? "Restored to the archive!" : `The paper was: ${paper.title}`);
@@ -1053,14 +1118,24 @@
   // Settings (user, 09-10-2026), as Muldle's: a dialog behind the gear, top
   // right. Smooth jumps (the glide): on by default with a mouse or
   // trackpad, off on a touch screen (core.js's glideOn), the player's own
-  // choice first; off, the jumps are instant and the paper draws only near
-  // the view (jumpTo, and the stylesheet's .glide-off). Kept in this
+  // choice first; off, the jumps are instant and, where the browser has
+  // scroll anchoring, the paper draws only near the view (jumpTo, and the
+  // stylesheet's .anchoring.glide-off). Kept in this
   // browser only, once the player switches it.
   let glide = true;
   function setUpSettings() {
     const kept = load(SETTINGS_KEY);
     // an older core.js (a deploy's mixed cache): on unless switched off
     glide = C.glideOn ? C.glideOn(kept, matchMedia(C.TOUCH_ONLY).matches) : !(kept && kept.glide === false);
+    // Drawing only near the view needs scroll anchoring, which keeps the
+    // text in place as blocks above the view get their real height. WebKit
+    // (Safari, every iPhone and iPad) has none: there the text jumped as the
+    // player scrolled up after a jump (review of 09-10-2026, B2), so there
+    // the glide off means instant jumps only, and Settings says no more.
+    const anchoring = !!(window.CSS && CSS.supports && CSS.supports("overflow-anchor", "auto"));
+    document.documentElement.classList.toggle("anchoring", anchoring);
+    const faster = $("glide-faster");
+    if (!anchoring && faster) faster.remove();
     document.documentElement.classList.toggle("glide-off", !glide);
     const dialog = $("settings"), button = $("settings-button"), box = $("glide-toggle");
     if (!dialog || !button || !box || !dialog.showModal) return; // an older index.html
@@ -1330,13 +1405,38 @@
   }
   $("guess-input").addEventListener("input", showLength);
 
+  // A word guessed before stays in the field, selected: Enter again goes on
+  // through its places (as a find in a page does), typing replaces it
+  // (user, 14-10-2026: "It should only do this on second enter"). While it
+  // stands there unedited, each click or tap into the field, and the field
+  // coming back into focus, selects it whole again, so typing still
+  // replaces it (pre-push review of 14-10-2026, B1: a click left a caret in
+  // it, and the next word typed ran on, "quasarnebula", a counted miss).
+  // The arrow keys still edit it; once edited, clicks act as usual.
+  let keptWord = null;
+  const isKept = () => keptWord !== null && $("guess-input").value === keptWord;
+  const selectKept = () => {
+    const input = $("guess-input");
+    if (isKept()) input.setSelectionRange(0, input.value.length);
+  };
+  $("guess-input").addEventListener("input", () => { keptWord = null; });
+  $("guess-input").addEventListener("focus", selectKept);
+  $("guess-input").addEventListener("click", selectKept);
+  // a press in the field would put a caret in the word on its release,
+  // after the click (Chrome): the release leaves the selection as it is
+  $("guess-input").addEventListener("mouseup", e => {
+    if (document.activeElement === e.target && isKept()) e.preventDefault();
+  });
+
   $("guess-form").addEventListener("submit", e => {
     e.preventDefault();
     const input = $("guess-input");
-    guess(input.value);
-    input.value = "";
+    const keep = guess(input.value);
+    if (!keep) input.value = "";
+    keptWord = keep ? input.value : null;
     showLength();
     input.focus();
+    selectKept();
   });
 
   $("give-up").addEventListener("click", () => {

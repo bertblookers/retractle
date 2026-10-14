@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retractle — Restore the retracted paper</title>
 <meta name="description" content="Restore a famous astronomy paper word by word. A work in progress.">
-<link rel="stylesheet" href="shared.css?v=c075b4eccd">
-<link rel="stylesheet" href="retractle.css?v=c075b4eccd">
+<link rel="stylesheet" href="shared.css?v=0302580653">
+<link rel="stylesheet" href="retractle.css?v=0302580653">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -34,11 +34,13 @@
 <dialog id="settings" class="settings-dialog" aria-labelledby="settings-title">
   <button type="button" id="settings-close" class="settings-close" aria-label="Close">&times;</button>
   <h2 id="settings-title">Settings</h2>
+  <!-- #glide-faster's look inline: an older stylesheet in a deploy's mixed
+       cache made every span here a block (review of 14-10-2026, B2) -->
   <label class="settings-toggle">
     <input type="checkbox" id="glide-toggle" checked>
     <span class="settings-toggle-text">Smooth jumps
-      <span>Scroll smoothly to a guess's places. Off: the jumps are instant,
-        and long papers open faster.</span></span>
+      <span>Scroll smoothly to a guess's places. Off: the jumps are
+        instant<span id="glide-faster" style="display: inline; margin: 0">, and long papers open faster</span>.</span></span>
   </label>
   <p id="settings-reduced" class="settings-note" hidden>Your device asks for
     reduced motion, so the jumps are always instant.</p>
@@ -62,7 +64,9 @@
     <li>Figures are retracted too: each comes back once you've restored
       40% of the words hidden in its caption (one without a caption, when
       the game is over).</li>
-    <li>Click a guess in the list to jump through its places. The score
+    <li>Click a guess in the list to highlight its places, and again to go
+      through them one by one; a word you guessed before, typed again, does
+      the same with Enter. The score
       shows how much of the paper you've restored: the share of its black
       bars your guesses brought back.</li>
     <li>A new paper every day at midnight; &laquo; and &raquo; beside the
@@ -132,10 +136,10 @@
   <a href="https://github.com/bertblookers/retractle" target="_blank" rel="noopener">Source</a> (AGPL-3.0)
 </footer>
 
-<script src="papers.js?v=c075b4eccd"></script>
-<script src="lemmas.js?v=c075b4eccd"></script>
-<script src="core.js?v=c075b4eccd"></script>
-<script src="news.js?v=c075b4eccd"></script>
-<script src="retractle.js?v=c075b4eccd"></script>
+<script src="papers.js?v=0302580653"></script>
+<script src="lemmas.js?v=0302580653"></script>
+<script src="core.js?v=0302580653"></script>
+<script src="news.js?v=0302580653"></script>
+<script src="retractle.js?v=0302580653"></script>
 </body>
 </html>

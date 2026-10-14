@@ -17,22 +17,36 @@
 const RETRACTLE_NEWS = {
   updates: [
     {
-      id: "share-phones", // drafted 09-10-2026; went live with the release the user approved that day
-      date: { y: 2026, m: 10, d: 9 },
+      id: "pick-then-step", // drafted 14-10-2026; approved by the user that day, live with that day's release
+      date: { y: 2026, m: 10, d: 14 },
+      title: "Going through a guess's places",
+      items: [
+        "Clicking a guess in the list highlights its places; click it again to go through them one by one.",
+        "Typing a word you already guessed highlights it the same way; press Enter again to go through its places.",
+      ],
+    },
+    {
+      id: "share-phones", // drafted 09-10-2026 and approved that day; its release was held back
+      // for the review's fixes, so it went live with the release of 14-10-2026, dated so (review
+      // of 14-10-2026, A1); item 1 narrowed to what the code does (review of 09-10-2026, A2/C2:
+      // a practice result's link is bare, and a link opened where its day has not come yet opens
+      // that place's today)
+      date: { y: 2026, m: 10, d: 14 },
       title: "Shared links, and jumps on phones",
       items: [
-        "The link in a shared result opens that same paper, also on a later day.",
+        "The link in a shared result opens that same puzzle, on its day or later; a practice result links to today's paper.",
         "On phones and tablets, jumps to a guess's places are instant unless you turn on smooth jumps in Settings (⚙).",
       ],
     },
     {
       id: "time-settings", // drafted 09-10-2026; went live with the release the user approved that day;
-      // item 2 reworded the same day, true whatever the default (user, 09-10-2026: off by default on phones)
+      // item 2 reworded the same day, true whatever the default (user, 09-10-2026: off by default on phones),
+      // and true without scroll anchoring too (review of 09-10-2026, B2: Safari, iPhone and iPad draw every block)
       date: { y: 2026, m: 10, d: 9 },
       title: "Your time, and Settings",
       items: [
         "A restored paper shows how long you took: the time the page was open and in view, from your first guess.",
-        "Settings (⚙, top right) switches the smooth scroll to a guess's places on or off. Off, jumps are instant and long papers open faster.",
+        "Settings (⚙, top right) switches the smooth scroll to a guess's places on or off. Off, jumps are instant, and in most browsers long papers open faster.",
       ],
     },
     {
