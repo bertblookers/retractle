@@ -626,6 +626,38 @@ const RetractleCore = (() => {
     return out;
   }
 
+  // A figure: LaTeXML's `figure.ltx_figure`, or a rotated one's
+  // `div.ltx_figure` around a bare <figure> (astro-ph/0009005), or a plate
+  // (`figure.ltx_float_plate`, astro-ph/0110414). One inside another is a
+  // panel of it, not a figure of its own.
+  const FIGURE = ".ltx_figure, figure.ltx_float_plate";
+  // A figure arXiv's HTML holds only as its caption, a plain paragraph
+  // outside any figure (the graphics were separate pages of the PDF:
+  // astro-ph/9712213, 9805201): it starts with the figure's label and then
+  // ".", ":" or a dash ("FIG. 1.— …", "Figure 2: …", "Plate 3. …"). A
+  // paragraph that only names a figure stays a paragraph ("Figure 3 shows",
+  // "Figure 2.1 gives", "Figures 4 and 5").
+  const CAPTION_LABEL = /^\s*(?:fig(?:ure)?\.?|plate)\s*\d+[a-z]?(?:\s*[.:](?!\d)(?:\s*(?:[–—]|-{2,3}))?|\s*(?:[–—]|-{2,3}))/i;
+
+  // a caption paragraph's parts with its label as a { tag } (so the figure
+  // is named "Figure 1"), or null if it doesn't start with one
+  function captionParts(parts) {
+    let text = "";
+    for (const p of parts) {
+      const s = p.w ?? p.t;
+      if (s === undefined || text.length > 40) break;
+      text += s;
+    }
+    const m = CAPTION_LABEL.exec(text);
+    if (!m) return null;
+    let n = m[0].length, i = 0;
+    while (n > 0) n -= (parts[i].w ?? parts[i].t).length, i++;
+    // the label ends inside a part between words (".— " is one): its rest
+    // stays text
+    const rest = n < 0 ? [{ t: parts[i - 1].t.slice(n) }] : [];
+    return [{ tag: m[0].trim() }, ...rest, ...parts.slice(i)];
+  }
+
   // `start`: the abstract; whatever lies before it is front matter
   function walk(el, out, start) {
     for (const child of el.children) {
@@ -644,7 +676,10 @@ const RetractleCore = (() => {
         }
       } else if (child.classList.contains("ltx_p")) {
         const parts = inline(child, []);
-        if (parts.some(p => p.w)) out.push({ kind: "para", parts });
+        const caption = !child.closest(`${FIGURE}, figure`) && captionParts(parts);
+        // a figure with only its caption: no graphic, so "Beyond repair"
+        if (caption) out.push({ kind: "figure", id: child.id || "", images: [], blocks: 1 }, { kind: "caption", parts: caption });
+        else if (parts.some(p => p.w)) out.push({ kind: "para", parts });
       } else if (name === "figcaption") {
         const parts = inline(child, []);
         if (parts.some(p => p.w)) out.push({ kind: "caption", parts });
@@ -657,8 +692,7 @@ const RetractleCore = (() => {
         if (parts.some(p => p.w)) out.push({ kind: "para", parts });
       } else if (child.matches(".ltx_equation, .ltx_equationgroup")) {
         out.push({ kind: "equation", rows: equationRows(child) });
-      } else if (name === "figure" && child.classList.contains("ltx_figure") &&
-          !child.parentElement.closest("figure.ltx_figure")) {
+      } else if (child.matches(FIGURE) && !child.parentElement.closest(FIGURE)) {
         // a figure (its panels, nested figures among them, inside it): its
         // graphics, then its captions; one with neither is left out
         const fig = { kind: "figure", id: child.id || "", images: figureImages(child), blocks: 0 };

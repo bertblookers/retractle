@@ -270,8 +270,8 @@
     // a click from the keyboard (Enter, Space) has detail 0, a mouse's or a
     // touch's its count of presses; some screen readers' presses count one
     // too (NVDA or JAWS in Firefox, TalkBack on Android, VoiceOver on iOS),
-    // so theirs land in the guess box (a known limit: CLAUDE.md, "The puzzle
-    // navigator")
+    // so theirs land in the guess box (a known limit: notes/game-rules.md,
+    // "The puzzle navigator")
     for (const [id, to] of [["nav-prev", day - 1], ["nav-next", day + 1], ["nav-today", today]]) {
       $(id).addEventListener("click", e => go(to, e.detail === 0 ? id : null));
     }
