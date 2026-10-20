@@ -238,6 +238,35 @@ const RetractleCore = (() => {
   const playTime = ms => timeIn(ms, (n, short) => `${n} ${short}`);
   const playTimeWords = ms => timeIn(ms, (n, short, long) => `${n} ${long}${n === 1 ? "" : "s"}`);
 
+  /* ============ hints ============ */
+
+  // Hints (user, 20-10-2026: "hint buttons for when someone is stuck"; of
+  // the kinds offered, "Reveal a word" only, every use counted): a hint
+  // reveals one hidden word in one place, as Redactle's does (Claude's call:
+  // that one place, not every place of the word). Never a word of the title,
+  // in any of its forms: the title is what is being guessed. A revealed
+  // place is not restored: it counts in neither the share restored nor a
+  // figure's share until a guess restores it.
+  function canReveal(n, title) {
+    return !isCommon(n) && !titleWords(title).some(w => related(w, n));
+  }
+
+  // A save keeps its hints, in the order used, as `hints`: [{ n, k }], the
+  // k-th place (from 0) of the word n, so a reveal stays on its word if the
+  // paper's text is ever read a little differently. A save without `hints`
+  // (every save before hints, and every game without one) has none: a game
+  // that uses no hint saves exactly what it saved before. Returns the list,
+  // or null for a `hints` the code never writes (the save is then not used).
+  function saveHints(s) {
+    if (!s || s.hints === undefined) return [];
+    const ok = Array.isArray(s.hints) && s.hints.every(h => !!h && typeof h === "object" &&
+      typeof h.n === "string" && /^[a-z0-9]+$/.test(h.n) && Number.isInteger(h.k) && h.k >= 0);
+    return ok ? s.hints : null;
+  }
+
+  // "1 hint", "2 hints"; "" for none (the result and the share say nothing)
+  const hintCount = n => n > 0 ? `${n} hint${n === 1 ? "" : "s"}` : "";
+
   /* ============ Settings ============ */
 
   // Smooth jumps (the glide): the player's own choice wins; without one, on
@@ -735,6 +764,7 @@ const RetractleCore = (() => {
   return {
     COMMON, norm, isCommon, useLemmas, related, tokenize, cleanGuess, guessParts,
     typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, restoredShare, timeOfSave, playTime, playTimeWords,
+    canReveal, saveHints, hintCount,
     TOUCH_ONLY, glideOn, EPOCH, SEED, ERAS,
     shuffledOrder, dayNumber, dayOfDate, puzzleFromQuery, eraIndex, eraPool, paperForDay,
     poolForDay, newsParts, htmlUrl, absUrl, figureUrl, FIGURE_SHARE, figureRevealed, mathParts,

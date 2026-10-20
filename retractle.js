@@ -5,9 +5,9 @@
 (() => {
   "use strict";
   const C = RetractleCore;
-  const DAILY_KEY = "retractle-v1";           // { day, id, v, guesses, done }: today's daily
-  const ARCHIVE_KEY = "retractle-archive-v1"; // { "<day>": { day, id, v, guesses, done } }: earlier days'
-  const PRACTICE_KEY = "retractle-practice-v1"; // { id, v, guesses, done }
+  const DAILY_KEY = "retractle-v1";           // { day, id, v, guesses, done, ms, hints? }: today's daily
+  const ARCHIVE_KEY = "retractle-archive-v1"; // { "<day>": { day, id, v, guesses, done, ms, hints? } }: earlier days'
+  const PRACTICE_KEY = "retractle-practice-v1"; // { id, v, guesses, done, ms, hints? }
   const NAV_KEY = "retractle-nav-focus";      // sessionStorage: the navigator's button pressed before a load
   const SETTINGS_KEY = "retractle-settings-v1"; // { glide }: the player's settings
   const FETCH_TIMEOUT = 30000;
@@ -26,6 +26,7 @@
   let byNorm = new Map(); // normalised word -> indices into tokens
   let guesses = [];     // normalised guesses, in order
   let hits = [];        // how many places each guess restored (parallel)
+  let hints = [];       // the hints used, in order: { n, k }, the k-th place of word n (C.saveHints)
   let done = null;      // null | "won" | "gaveup"
   let selected = null;  // { i, pos, chosen }: the guess whose places are lit (pick)
   let license = null;   // { text, href }: the paper's license, from arXiv's page
@@ -108,6 +109,8 @@
     const entry = { id: paper.id, v: paper.v, guesses, done };
     if (!practice) entry.day = day;
     if (elapsed !== null) entry.ms = Math.round(elapsed);
+    // only once a hint is used, so a game without one saves what it always did
+    if (hints.length) entry.hints = hints;
     const key = saveKey();
     let r = null;
     if (key === PRACTICE_KEY) r = write(PRACTICE_KEY, JSON.stringify(entry));
@@ -198,11 +201,13 @@
   }
 
   // A save is used only if it has the shape this code writes; anything else
-  // (an older format, a hand-edited or broken entry) is started afresh.
+  // (an older format, a hand-edited or broken entry) is started afresh. A
+  // save without hints (C.saveHints) is one; an older core.js (a deploy's
+  // mixed cache) doesn't read them.
   function validSave(s) {
     return !!s && typeof s === "object" && typeof s.id === "string" && Number.isInteger(s.v) &&
       Array.isArray(s.guesses) && s.guesses.every(g => typeof g === "string" && /^[a-z0-9]+$/.test(g)) &&
-      (s.done === null || s.done === "won" || s.done === "gaveup");
+      (s.done === null || s.done === "won" || s.done === "gaveup") && (!C.saveHints || C.saveHints(s) !== null);
   }
 
   // the puzzle in play and its saved guesses, if any
@@ -305,9 +310,12 @@
     const n = C.norm(w);
     if (!byNorm.has(n)) byNorm.set(n, []);
     byNorm.get(n).push(tokens.length);
+    tokenAt.set(el, tokens.length);
     tokens.push({ w, n, el });
     return el;
   }
+  const tokenAt = new WeakMap(); // a bar's element -> its index in tokens
+  let bodyFrom = 0;              // tokens before it are the title's
 
   const hidden = w => !C.isCommon(C.norm(w));
 
@@ -416,6 +424,7 @@
     const title = $("paper-title");
     title.replaceChildren();
     addParts(C.tokenize(paper.title), title);
+    bodyFrom = tokens.length;
     const body = $("paper-body");
     body.replaceChildren();
     figures = [];
@@ -549,7 +558,7 @@
     for (const f of figures) {
       if (f.shown) continue;
       let restored = 0;
-      for (let i = f.from; i < f.to; i++) if (!tokens[i].el.classList.contains("r")) restored++;
+      for (let i = f.from; i < f.to; i++) if (!unrestored(tokens[i])) restored++;
       if (!all && !C.figureRevealed(restored, f.to - f.from)) continue;
       f.shown = true;
       f.boxes.forEach((box, k) => {
@@ -738,15 +747,21 @@
     t.el.className = className;
     t.el.removeAttribute("role");
     t.el.removeAttribute("aria-label");
+    t.el.removeAttribute("tabindex"); // a hint's keyboard place (setRover)
   }
 
+  // a place no guess has restored yet: a bar, or a word a hint revealed
+  // (core.js's canReveal: a hint restores nothing, so a guess of that word
+  // still restores it, the same in play and after a reload)
+  const unrestored = t => t.el.classList.contains("r") || t.el.classList.contains("hint");
+
   // restores a guess everywhere; records its number of places (the guess
-  // list's "Found") and returns how many of them were still redacted
+  // list's "Found") and returns how many of them were not restored yet
   function restore(g) {
     const places = placesOf(g);
     let fresh = 0;
     for (const i of places) {
-      if (tokens[i].el.classList.contains("r")) fresh++;
+      if (unrestored(tokens[i])) fresh++;
       show(tokens[i], "k");
     }
     hits.push(places.length);
@@ -755,7 +770,7 @@
   }
 
   function hiddenPlaces(g) {
-    return placesOf(g).filter(i => tokens[i].el.classList.contains("r")).length;
+    return placesOf(g).filter(i => unrestored(tokens[i])).length;
   }
 
   function revealRest() {
@@ -791,12 +806,22 @@
       list.prepend(tr); // newest on top
     });
     $("guess-count").textContent = guesses.length ? `(${guesses.length})` : "";
-    // how much of the paper is restored (user, 09-10-2026), beside the
-    // score; an older core.js (a deploy's mixed cache) leaves it out
-    const share = C.restoredShare ? ` · ${C.restoredShare(restored, tokens.length)} restored` : "";
-    $("score").textContent = guesses.length
-      ? `${guesses.length} guess${guesses.length === 1 ? "" : "es"} · ${C.accuracy(hits)}% accuracy${share}`
-      : "";
+    drawScore();
+  }
+
+  // the score: guesses, the hints used (user, 20-10-2026: every use
+  // counted), accuracy and how much of the paper is restored (user,
+  // 09-10-2026); an older core.js (a deploy's mixed cache) leaves out what
+  // it can't count
+  function drawScore() {
+    const parts = [];
+    if (guesses.length) parts.push(`${guesses.length} guess${guesses.length === 1 ? "" : "es"}`);
+    if (C.hintCount && hints.length) parts.push(C.hintCount(hints.length));
+    if (guesses.length) {
+      parts.push(`${C.accuracy(hits)}% accuracy`);
+      if (C.restoredShare) parts.push(`${C.restoredShare(restored, tokens.length)} restored`);
+    }
+    $("score").textContent = parts.join(" · ");
   }
 
   // a guess's row marked selected or not: its look (sel) and, for a screen
@@ -896,6 +921,192 @@
     $("message").textContent = text;
   }
 
+  /* ============ hints ============ */
+
+  // Hints (user, 20-10-2026: "hint buttons for when someone is stuck"; the
+  // kind chosen, "Reveal a word", every use counted). Hint arms a reveal:
+  // the next click or tap on a black bar in the text reveals that word in
+  // that one place (Claude's call, as in Redactle), never a word of the
+  // title in any form (core.js's canReveal); Hint again, or Escape, cancels.
+  // From the keyboard, arming focuses a bar in view (one bar at a time
+  // takes the focus, a button labelled as every bar is: "redacted, 6
+  // characters"), the arrow keys go to the bar before or after, Enter or
+  // Space reveals it. A screen reader's click on any bar reveals it too.
+  // A guess or the game's end cancels. Used hints are saved with the game
+  // and counted in the score, the result and a shared result.
+  // While armed, every bar a hint may reveal has a border, the others none
+  // (user, 20-10-2026: "the words you can reveal have an obvious border
+  // around the bars. The words / bars you cannot reveal do not."): a bar of
+  // a title word in any form is marked no-hint once the paper is drawn
+  // (markRefused), the stylesheet draws the border, the arrow keys go only
+  // from one bordered bar to the next, and the armed message says how many
+  // there are. A pick of a bar without one is refused, free, as before.
+  let armed = false;
+  let rover = null; // the bar that takes the focus while armed
+  const hintButton = $("hint-button"); // an older index.html has none
+
+  // place i revealed by a hint: shown, marked as a hint's, not restored
+  const showHint = i => show(tokens[i], "k hint");
+
+  // the bars of the text a hint can't reveal (core.js's canReveal), marked
+  // no-hint, once the paper is drawn and the save's guesses restored: the
+  // title is the same all game, and a bar a guess restores later loses the
+  // class with its bar (show)
+  function markRefused() {
+    const refused = new Map();
+    for (let i = bodyFrom; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (!refused.has(t.n)) refused.set(t.n, !C.canReveal(t.n, paper.title));
+      if (refused.get(t.n) && t.el.classList.contains("r")) t.el.classList.add("no-hint");
+    }
+  }
+
+  // a bar a hint may reveal (bordered while armed): a black bar of the
+  // text, not of a title word
+  const revealable = el => el.classList.contains("r") && !el.classList.contains("no-hint");
+  const REVEALABLE = "span.r:not(.no-hint)";
+
+  // a save's hints shown again (after the guesses: a place a guess restored
+  // since stays restored), each on its word's k-th place if the paper still
+  // has it there and it may be revealed; every saved hint counts
+  function showSavedHints() {
+    for (const h of hints) {
+      const i = (byNorm.get(h.n) || [])[h.k];
+      if (i !== undefined && i >= bodyFrom && tokens[i].el.classList.contains("r") && C.canReveal(h.n, paper.title)) showHint(i);
+    }
+  }
+
+  // the bar that takes the focus: role button and in the tab order while
+  // armed, a plain bar again after
+  function setRover(el, focus) {
+    if (rover && rover !== el) {
+      rover.removeAttribute("tabindex");
+      if (rover.classList.contains("r")) rover.setAttribute("role", "img");
+    }
+    rover = el;
+    if (!el) return;
+    el.setAttribute("tabindex", "0");
+    el.setAttribute("role", "button");
+    if (!focus) return;
+    el.focus({ preventScroll: true });
+    if (!onScreen(el)) el.scrollIntoView({ block: "center" });
+  }
+
+  // the part of the screen the paper shows: below its sticky title, above
+  // the panel docked at the bottom on a phone (the stylesheet's breakpoint;
+  // on a desktop the panel stands beside the paper)
+  function paperView() {
+    const title = $("paper-title").getBoundingClientRect();
+    const docked = matchMedia("(max-width: 760px)").matches;
+    return { top: Math.max(0, title.bottom), bottom: docked ? Math.min(innerHeight, $("panel").getBoundingClientRect().top) : innerHeight };
+  }
+  function onScreen(el) {
+    const r = el.getBoundingClientRect(), v = paperView();
+    return r.top >= v.top && r.bottom <= v.bottom && r.width > 0;
+  }
+
+  // the first bar a hint may reveal wholly on screen, or null: the blocks
+  // lie one under the other, so the first reaching the view is found by
+  // halving (as numberInView does)
+  function barInView() {
+    const v = paperView();
+    let lo = 0, hi = barBlocks.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (barBlocks[mid].getBoundingClientRect().bottom < v.top) lo = mid + 1;
+      else hi = mid;
+    }
+    for (let b = lo; b < barBlocks.length && barBlocks[b].getBoundingClientRect().top < v.bottom; b++) {
+      for (const el of barBlocks[b].querySelectorAll(REVEALABLE)) if (onScreen(el)) return el;
+    }
+    return null;
+  }
+
+  // the next bar a hint may reveal after (step 1) or before (step -1) place i
+  function barFrom(i, step) {
+    for (let j = i + step; j >= bodyFrom && j < tokens.length; j += step) {
+      if (revealable(tokens[j].el)) return tokens[j].el;
+    }
+    return null;
+  }
+
+  // keyboard: whether the press came from the keyboard (a click with detail
+  // 0), which then moves the focus to a bar, scrolling to the first one if
+  // none is on screen; a mouse or tap leaves the page where it is
+  function arm(keyboard) {
+    if (done || armed || !C.canReveal) return;
+    const start = barInView() || (keyboard ? barFrom(bodyFrom - 1, 1) : null);
+    if (!start && !barFrom(bodyFrom - 1, 1)) { say("No black bar left in the text can be revealed"); return; }
+    armed = true;
+    hintButton.setAttribute("aria-pressed", "true");
+    $("paper").classList.add("arming");
+    // how many, said for a screen reader too (the borders are only seen)
+    const can = `${$("paper-body").querySelectorAll(REVEALABLE).length} can be revealed`;
+    say(keyboard ? `Hint: choose a bordered bar with the arrow keys and press Enter; ${can}. Escape cancels`
+      : `Hint: click or tap a bordered bar to reveal its word; ${can}. Hint again cancels`);
+    if (start) setRover(start, true);
+  }
+
+  // returns whether a bar had the focus
+  function disarm() {
+    if (!armed) return false;
+    armed = false;
+    if (hintButton) hintButton.setAttribute("aria-pressed", "false");
+    $("paper").classList.remove("arming");
+    const had = !!rover && document.activeElement === rover;
+    setRover(null);
+    return had;
+  }
+
+  // a bar picked while armed: revealed, or refused if it is a title word
+  function reveal(el, keyboard) {
+    const i = tokenAt.get(el);
+    if (i === undefined || !el.classList.contains("r")) return;
+    const t = tokens[i];
+    if (i < bodyFrom || !C.canReveal(t.n, paper.title)) {
+      say("That word is in the title, so a hint can't reveal it");
+      return;
+    }
+    hints.push({ n: t.n, k: byNorm.get(t.n).indexOf(i) });
+    disarm();
+    showHint(i);
+    say(`Revealed “${t.w}” (hint ${hints.length})`);
+    drawScore();
+    save();
+    // on to the next guess; a tap leaves the on-screen keyboard closed
+    if (keyboard || !matchMedia(C.TOUCH_ONLY).matches) $("guess-input").focus({ preventScroll: true });
+  }
+
+  if (hintButton) {
+    hintButton.addEventListener("click", e => {
+      if (!armed) { arm(e.detail === 0); return; }
+      disarm();
+      say("Hint cancelled");
+    });
+    $("paper").addEventListener("click", e => {
+      const el = armed && e.target.closest && e.target.closest("span.r");
+      if (el) reveal(el, e.detail === 0);
+    });
+    $("paper").addEventListener("keydown", e => {
+      if (!armed || e.target !== rover) return;
+      const i = tokenAt.get(rover);
+      let to = null;
+      if (e.key === "Enter" || e.key === " ") reveal(rover, true);
+      else if (e.key === "ArrowRight" || e.key === "ArrowDown") to = barFrom(i, 1);
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") to = barFrom(i, -1);
+      else return;
+      e.preventDefault();
+      if (to) setRover(to, true);
+    });
+    document.addEventListener("keydown", e => {
+      // Escape in the open Settings dialog closes the dialog only
+      if (e.key !== "Escape" || !armed || ($("settings") && $("settings").open)) return;
+      e.preventDefault();
+      if (disarm()) hintButton.focus();
+      say("Hint cancelled");
+    });
+  }
+
   /* ============ playing ============ */
 
   // One word, or each part of "light-curve" / "Hubble's" in turn (a part
@@ -974,6 +1185,7 @@
 
   function finish(how) {
     done = how;
+    disarm();
     clock(); // stops: the time up to this guess
     revealRest();
     revealFigures(true);
@@ -1038,7 +1250,9 @@
     // any later day too (today's as well: user, 09-10-2026). A share never
     // hints at the answer (the family's rule): no word guessed, no title.
     const url = location.origin + location.pathname + (practice ? "" : `?p=${day}`);
-    return `${name}: paper restored in ${guesses.length} guesses (${C.accuracy(hits)}% accuracy)\n${url}`;
+    // the hints used, counted (user, 20-10-2026); nothing for none
+    const used = C.hintCount ? C.hintCount(hints.length) : "";
+    return `${name}: paper restored in ${guesses.length} guesses (${C.accuracy(hits)}% accuracy)${used ? ` with ${used}` : ""}\n${url}`;
   }
 
   function showResult() {
@@ -1054,6 +1268,14 @@
       time.className = "result-time";
       time.textContent = `Restored in ${C.playTime(elapsed)}`;
       box.append(time);
+    }
+    // the hints used (user, 20-10-2026: every use counted), won or not
+    const used = C.hintCount ? C.hintCount(hints.length) : "";
+    if (used) {
+      const line = document.createElement("p");
+      line.className = "result-hints";
+      line.textContent = `${used} used`;
+      box.append(line);
     }
     box.append(...cite());
     const row = document.createElement("p");
@@ -1097,6 +1319,7 @@
     $("stamp").hidden = done !== "won";
     $("guess-input").disabled = true;
     $("guess-submit").disabled = true;
+    if (hintButton) hintButton.disabled = hintButton.hidden = true;
     $("guess-form").hidden = true; // leaves the room to the paper
     $("give-up").hidden = true;
     linkFigures();
@@ -1305,6 +1528,8 @@
     const { p, s } = choosePuzzle();
     paper = p;
     guesses = s ? s.guesses.slice() : [];
+    // an older core.js (a deploy's mixed cache) has no hints
+    hints = s && C.saveHints ? C.saveHints(s).map(h => ({ n: h.n, k: h.k })) : [];
     done = s ? s.done : null;
     // an older core.js (a deploy's mixed cache) keeps no time
     elapsed = C.timeOfSave ? C.timeOfSave(s) : null;
@@ -1332,6 +1557,7 @@
       hits = [];
       restored = 0;
       for (const g of guesses) restore(g);
+      if (C.canReveal) { markRefused(); showSavedHints(); }
       drawGuesses();
       if (C.figureRevealed) revealFigures(!!done);
       if (done) {
@@ -1340,6 +1566,7 @@
       } else {
         $("guess-input").disabled = false;
         $("guess-submit").disabled = false;
+        if (hintButton && C.canReveal) hintButton.disabled = hintButton.hidden = false;
         $("give-up").hidden = false;
         showLength(); // a browser may have kept the field's text over a reload
         if (!navFocused) $("guess-input").focus();
@@ -1358,7 +1585,7 @@
       fail(`Something went wrong setting up the paper (${e.message}).`);
       return;
     }
-    window.__retractle = { paper, tokens, guesses: () => guesses, blocks, day, today, time: () => elapsed,
+    window.__retractle = { paper, tokens, guesses: () => guesses, hints: () => hints, blocks, day, today, time: () => elapsed,
       figures: () => figures.map(f => ({ id: f.block.id, name: f.name, shown: f.shown, images: f.images.length, hidden: f.to - f.from })) };
   }
 
@@ -1430,6 +1657,7 @@
 
   $("guess-form").addEventListener("submit", e => {
     e.preventDefault();
+    disarm(); // a guess cancels a hint not yet used
     const input = $("guess-input");
     const keep = guess(input.value);
     if (!keep) input.value = "";

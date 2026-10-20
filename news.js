@@ -17,6 +17,16 @@
 const RETRACTLE_NEWS = {
   updates: [
     {
+      id: "hints", // drafted 20-10-2026 (agent India-3); approved by the user that day ("OK as written"),
+      // live with that day's release (the user: "push when ready"); a later release moves the date
+      date: { y: 2026, m: 10, d: 20 },
+      title: "Hints",
+      items: [
+        "Stuck? Press Hint, then pick a black bar to reveal its word in that one place. A word of the title can't be revealed.",
+        "Each hint is counted in your result and in the result you share.",
+      ],
+    },
+    {
       id: "pick-then-step", // drafted 14-10-2026; approved by the user that day, live with that day's release
       date: { y: 2026, m: 10, d: 14 },
       title: "Going through a guess's places",

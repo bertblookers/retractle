@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retractle — Restore the retracted paper</title>
 <meta name="description" content="Restore a famous astronomy paper word by word. A work in progress.">
-<link rel="stylesheet" href="shared.css?v=5d0d2482a5">
-<link rel="stylesheet" href="retractle.css?v=5d0d2482a5">
+<link rel="stylesheet" href="shared.css?v=a06d99717f">
+<link rel="stylesheet" href="retractle.css?v=a06d99717f">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -69,6 +69,9 @@
       the same with Enter. The score
       shows how much of the paper you've restored: the share of its black
       bars your guesses brought back.</li>
+    <li>Stuck? Press Hint, then pick a black bar: its word is revealed in
+      that one place. A word of the title can't be revealed, and each hint
+      is counted in your result.</li>
     <li>A new paper every day at midnight; &laquo; and &raquo; beside the
       puzzle number take you to earlier days' papers. The papers are famous, well-loved
       astronomy papers from <a href="https://arxiv.org" target="_blank"
@@ -115,7 +118,13 @@
       <button id="guess-submit" type="submit" disabled>Restore</button>
     </form>
     <p id="message" class="message" role="status"></p>
-    <p id="score" class="score"></p>
+    <!-- the score, and Hint beside it: reveals the next black bar picked
+         (retractle.js shows it); not in the guess box's row, which it made
+         too narrow in the desktop's side panel -->
+    <div class="score-row">
+      <p id="score" class="score"></p>
+      <button id="hint-button" class="hint-button" type="button" aria-pressed="false" disabled hidden>Hint</button>
+    </div>
     <details id="guesses-box" class="guesses-box" open>
       <summary>Guesses <span id="guess-count"></span></summary>
       <table class="guesses">
@@ -136,10 +145,10 @@
   <a href="https://github.com/bertblookers/retractle" target="_blank" rel="noopener">Source</a> (AGPL-3.0)
 </footer>
 
-<script src="papers.js?v=5d0d2482a5"></script>
-<script src="lemmas.js?v=5d0d2482a5"></script>
-<script src="core.js?v=5d0d2482a5"></script>
-<script src="news.js?v=5d0d2482a5"></script>
-<script src="retractle.js?v=5d0d2482a5"></script>
+<script src="papers.js?v=a06d99717f"></script>
+<script src="lemmas.js?v=a06d99717f"></script>
+<script src="core.js?v=a06d99717f"></script>
+<script src="news.js?v=a06d99717f"></script>
+<script src="retractle.js?v=a06d99717f"></script>
 </body>
 </html>

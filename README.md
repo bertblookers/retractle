@@ -10,9 +10,10 @@ blacked out, except small words like *the*, *of* and *and*. Guess a word and
 it is restored everywhere it appears, in all its forms (observe, observed,
 observing; galaxy, galaxies). Restore every word of the title to win. Your
 score is the number of guesses and the share of them that restored
-something, beside how much of the paper you have restored. Each black bar
-shows how many characters it hides, and the guess box counts what you type
-the same way. The arrows beside the puzzle number take you to earlier days'
+something, beside how much of the paper you have restored. Stuck? A hint
+reveals one hidden word in one place, never a word of the title, and each
+hint is counted in your result. Each black bar shows how many characters it
+hides, and the guess box counts what you type the same way. The arrows beside the puzzle number take you to earlier days'
 papers, each with its own game.
 
 None of these papers was really retracted: they are well-known, well-loved
