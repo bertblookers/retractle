@@ -17,6 +17,18 @@
 const RETRACTLE_NEWS = {
   updates: [
     {
+      id: "share-time-give-up", // drafted 21-10-2026 (agent Yankee-3); approved by the user that day ("Otherwise ok"),
+      // its second line then given the give up's time (the user's change that day); dated the approval day: set the
+      // release day at the export
+      date: { y: 2026, m: 10, d: 21 },
+      title: "Your time in a shared result, and sharing a give up",
+      items: [
+        "A shared result now says how long you took to restore the paper, and how many hints you used, none included.",
+        "A paper you gave up on can be shared too, with a line that says you gave up and after how long.",
+        "After a give up, the result now shows how long you took, as after a win.",
+      ],
+    },
+    {
       id: "hints", // drafted 20-10-2026 (agent India-3); approved by the user that day ("OK as written"),
       // live with that day's release (the user: "push when ready"); a later release moves the date
       date: { y: 2026, m: 10, d: 20 },

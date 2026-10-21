@@ -1250,7 +1250,11 @@
     // any later day too (today's as well: user, 09-10-2026). A share never
     // hints at the answer (the family's rule): no word guessed, no title.
     const url = location.origin + location.pathname + (practice ? "" : `?p=${day}`);
-    // the hints used, counted (user, 20-10-2026); nothing for none
+    // the time it took and the hints used, and a give up its own line, with
+    // its time too (user, 21-10-2026): core.js's shareLine
+    if (C.shareLine) return `${C.shareLine({ name, won: done === "won", guesses: guesses.length,
+      accuracy: C.accuracy(hits), ms: elapsed, hints: hints.length })}\n${url}`;
+    // an older core.js (a deploy's mixed cache): a win's line as before
     const used = C.hintCount ? C.hintCount(hints.length) : "";
     return `${name}: paper restored in ${guesses.length} guesses (${C.accuracy(hits)}% accuracy)${used ? ` with ${used}` : ""}\n${url}`;
   }
@@ -1262,11 +1266,15 @@
     head.className = "result-head";
     head.textContent = done === "won" ? "Restored to the archive!" : "The paper was:";
     box.append(head);
-    // how long it took (user, 09-10-2026), for a game timed from its start
-    if (done === "won" && elapsed !== null && C.playTime) {
+    // how long it took (user, 09-10-2026), for a game timed from its start;
+    // a give up's too (user, 21-10-2026), as its share says it: core.js's
+    // resultTime; an older core.js (a deploy's mixed cache): a win's only
+    const took = C.resultTime ? C.resultTime({ won: done === "won", guesses: guesses.length, ms: elapsed })
+      : done === "won" && elapsed !== null && C.playTime ? `Restored in ${C.playTime(elapsed)}` : "";
+    if (took) {
       const time = document.createElement("p");
       time.className = "result-time";
-      time.textContent = `Restored in ${C.playTime(elapsed)}`;
+      time.textContent = took;
       box.append(time);
     }
     // the hints used (user, 20-10-2026: every use counted), won or not
@@ -1280,7 +1288,9 @@
     box.append(...cite());
     const row = document.createElement("p");
     row.className = "result-actions";
-    if (done === "won") {
+    // a give up is shared too, with its own line (user, 21-10-2026); an
+    // older core.js has no line for it, so no Share
+    if (done === "won" || C.shareLine) {
       const share = document.createElement("button");
       share.type = "button";
       share.textContent = "Share";

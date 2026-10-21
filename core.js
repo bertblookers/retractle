@@ -264,8 +264,44 @@ const RetractleCore = (() => {
     return ok ? s.hints : null;
   }
 
-  // "1 hint", "2 hints"; "" for none (the result and the share say nothing)
+  // "1 hint", "2 hints"; "" for none (the score and the result say nothing)
   const hintCount = n => n > 0 ? `${n} hint${n === 1 ? "" : "s"}` : "";
+
+  /* ============ the share ============ */
+
+  // A shared result's first line (user, 21-10-2026: the time it took and the
+  // hints used in it, and a give up with a line of its own). Counts only: a
+  // share never hints at the answer (the family's rule). A win: "paper
+  // restored in 12 min and 25 guesses (60% accuracy) with 2 hints". A give
+  // up: "gave up after 12 min and 25 guesses (60% accuracy) with 2 hints"
+  // (user, 21-10-2026: "gave up after x min and y guesses"), its time
+  // measured as a win's, from the first guess to the give up. The time as
+  // the result shows a win's ("under a minute", "1 h 5 min"), left out for
+  // a game never timed (ms null) and for a give up before any guess (the
+  // clock starts at the first guess, so no time was taken: Claude's call,
+  // as no accuracy without a guess). The hints always, "with no hints" for
+  // none (Claude's call: the reader can't see the game, and none is worth
+  // saying).
+  function shareLine({ name, won, guesses, accuracy, ms, hints }) {
+    const tries = `${guesses} guess${guesses === 1 ? "" : "es"}${guesses ? ` (${accuracy}% accuracy)` : ""}`;
+    const used = `with ${hints > 0 ? hintCount(hints) : "no hints"}`;
+    const taken = timeTaken(ms, guesses);
+    return `${name}: ${won ? "paper restored in" : "gave up after"} ${taken ? `${taken} and ` : ""}${tries} ${used}`;
+  }
+
+  // The time a result and a share say a game took ("12 min"), or "" for
+  // none: a game never timed (ms null) or a give up before any guess
+  function timeTaken(ms, guesses) {
+    return ms === null || ms === undefined || !guesses ? "" : playTime(ms);
+  }
+
+  // The result's time line (user, 09-10-2026, a win's; 21-10-2026, a give
+  // up's too): "Restored in 12 min", "Gave up after 12 min", in the share's
+  // words and with its time; "" when the share says none
+  function resultTime({ won, guesses, ms }) {
+    const taken = timeTaken(ms, guesses);
+    return taken ? `${won ? "Restored in" : "Gave up after"} ${taken}` : "";
+  }
 
   /* ============ Settings ============ */
 
@@ -764,7 +800,7 @@ const RetractleCore = (() => {
   return {
     COMMON, norm, isCommon, useLemmas, related, tokenize, cleanGuess, guessParts,
     typedLengths, checkGuess, twinOf, titleWords, isSolved, accuracy, restoredShare, timeOfSave, playTime, playTimeWords,
-    canReveal, saveHints, hintCount,
+    canReveal, saveHints, hintCount, shareLine, resultTime,
     TOUCH_ONLY, glideOn, EPOCH, SEED, ERAS,
     shuffledOrder, dayNumber, dayOfDate, puzzleFromQuery, eraIndex, eraPool, paperForDay,
     poolForDay, newsParts, htmlUrl, absUrl, figureUrl, FIGURE_SHARE, figureRevealed, mathParts,
