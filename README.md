@@ -5,7 +5,7 @@
 A paper has been accidentally retracted! It's on you to repair the damaged
 document and make sure it's restored into the archive.
 
-Each day one famous astronomy paper from arXiv appears with every word
+Each day one well-known astronomy arXiv paper appears with every word
 blacked out, except small words like *the*, *of* and *and*. Guess a word and
 it is restored everywhere it appears, in all its forms (observe, observed,
 observing; galaxy, galaxies). Restore every word of the title to win. Your
